@@ -29,10 +29,10 @@ pi-agent/
 
 | Extension | Description |
 |-----------|-------------|
-| `tilde-path` | |
-| `minimal-mode` | |
-| `tps` | |
-| `pi-oauth-qwen` | |
+| `tilde-path` | Rewrites CWD in system prompt to use `~` notation |
+| `minimal-mode` | Overrides built-in tool renderers with collapsed/expanded toggle (Ctrl+O) |
+| `tps` | Notifies tokens/sec and usage stats after each agent run |
+| `pi-oauth-qwen` | OAuth provider for Qwen models via device code flow with PKCE |
 
 ## Ideal State
 
