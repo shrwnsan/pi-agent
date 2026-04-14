@@ -1,0 +1,13 @@
+{
+  "name": "pi-agent",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Personal pi extensions, themes, skills, and prompts",
+  "license": "MIT",
+  "pi": {
+    "extensions": ["extensions"],
+    "themes": ["themes"],
+    "skills": ["skills"],
+    "prompts": ["prompts"]
+  }
+}
