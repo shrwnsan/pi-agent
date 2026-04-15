@@ -16,9 +16,7 @@ Then authenticate with `/login qwen-cli`, or set `QWEN_CLI_API_KEY` in your envi
 
 | Model ID | Name | Context Window | Max Output | Capabilities |
 |---|---|---|---|---|
-| `qwen3-coder-plus` | Qwen3 Coder Plus | 1M tokens | 65,536 | Text |
-| `qwen3-coder-flash` | Qwen3 Coder Flash | 1M tokens | 65,536 | Text |
-| `vision-model` | Qwen3 VL Plus | 262K tokens | 32,768 | Text + Image |
+| `coder-model` | Qwen 3.6 Plus | 1M tokens | 65,536 | Text + Image |
 
 ## Authentication
 
