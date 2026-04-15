@@ -32,7 +32,7 @@ pi-agent/
 | `tilde-path` | Rewrites CWD in system prompt to use `~` notation |
 | `minimal-mode` | Overrides built-in tool renderers with collapsed/expanded toggle (Ctrl+O) |
 | `tps` | Notifies tokens/sec and usage stats after each agent run |
-| `pi-oauth-qwen` | OAuth provider for Qwen models via device code flow with PKCE |
+| `pi-oauth-qwen` | ~~OAuth provider for Qwen models via device code flow with PKCE~~ **Suspended** — [Qwen's free OAuth tier ended April 15, 2026](https://github.com/QwenLM/qwen-code). Code preserved for potential future reactivation. |
 
 ## Ideal State
 
