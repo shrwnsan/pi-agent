@@ -1,32 +1,27 @@
 /**
- * Minimal Mode Example - Demonstrates a "minimal" tool display mode
+ * Minimal Mode Extension - Custom tool display with collapsed/expanded views
  *
- * This extension overrides built-in tools to provide custom rendering:
- * - Collapsed mode: Only shows the tool call (command/path), no output
- * - Expanded mode: Shows full output like the built-in renderers
+ * Overrides built-in tools with custom rendering:
+ * - Collapsed mode: Shows tool call header with summary counts, no full output
+ * - Expanded mode: Shows full output
  *
- * This demonstrates how a "minimal mode" could work, where ctrl+o cycles through:
- * - Standard: Shows truncated output (current default)
- * - Expanded: Shows full output (current expanded)
- * - Minimal: Shows only tool call, no output (this extension's collapsed mode)
+ * Note: The read tool is intentionally NOT overridden — v0.75.5+ built-in compact
+ * read cards provide superior collapsed rendering with smart file classification
+ * (skill, docs, resource) and OSC 8 clickable hyperlinks.
  *
- * Usage:
- *   pi -e ./minimal-mode.ts
- *
- * Then use ctrl+o to toggle between minimal (collapsed) and full (expanded) views.
+ * Use Ctrl+O to toggle between collapsed and expanded views.
  */
 
-import type { ExtensionAPI } from "@mariozechner/pi-coding-agent";
+import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 import {
 	createBashTool,
 	createEditTool,
 	createFindTool,
 	createGrepTool,
 	createLsTool,
-	createReadTool,
 	createWriteTool,
-} from "@mariozechner/pi-coding-agent";
-import { Text } from "@mariozechner/pi-tui";
+} from "@earendil-works/pi-coding-agent";
+import { Text } from "@earendil-works/pi-tui";
 import { homedir } from "os";
 
 /**
@@ -40,78 +35,7 @@ function shortenPath(path: string): string {
 	return path;
 }
 
-// Cache for built-in tools by cwd
-const toolCache = new Map<string, ReturnType<typeof createBuiltInTools>>();
-
-function createBuiltInTools(cwd: string) {
-	return {
-		read: createReadTool(cwd),
-		bash: createBashTool(cwd),
-		edit: createEditTool(cwd),
-		write: createWriteTool(cwd),
-		find: createFindTool(cwd),
-		grep: createGrepTool(cwd),
-		ls: createLsTool(cwd),
-	};
-}
-
-function getBuiltInTools(cwd: string) {
-	let tools = toolCache.get(cwd);
-	if (!tools) {
-		tools = createBuiltInTools(cwd);
-		toolCache.set(cwd, tools);
-	}
-	return tools;
-}
-
 export default function (pi: ExtensionAPI) {
-	// =========================================================================
-	// Read Tool
-	// =========================================================================
-	pi.registerTool({
-		name: "read",
-		label: "read",
-		description:
-			"Read the contents of a file. Supports text files and images (jpg, png, gif, webp). Images are sent as attachments. For text files, output is truncated to 2000 lines or 50KB (whichever is hit first). Use offset/limit for large files.",
-		parameters: getBuiltInTools(process.cwd()).read.parameters,
-
-		async execute(toolCallId, params, signal, onUpdate, ctx) {
-			const tools = getBuiltInTools(ctx.cwd);
-			return tools.read.execute(toolCallId, params, signal, onUpdate);
-		},
-
-		renderCall(args, theme) {
-			const path = shortenPath(args.path || "");
-			let pathDisplay = path ? theme.fg("accent", path) : theme.fg("toolOutput", "...");
-
-			// Show line range if specified
-			if (args.offset !== undefined || args.limit !== undefined) {
-				const startLine = args.offset ?? 1;
-				const endLine = args.limit !== undefined ? startLine + args.limit - 1 : "";
-				pathDisplay += theme.fg("warning", `:${startLine}${endLine ? `-${endLine}` : ""}`);
-			}
-
-			return new Text(`${theme.fg("toolTitle", theme.bold("read"))} ${pathDisplay}`, 0, 0);
-		},
-
-		renderResult(result, { expanded }, theme) {
-			// Minimal mode: show nothing in collapsed state
-			if (!expanded) {
-				return new Text("", 0, 0);
-			}
-
-			// Expanded mode: show full output
-			const textContent = result.content.find((c) => c.type === "text");
-			if (!textContent || textContent.type !== "text") {
-				return new Text("", 0, 0);
-			}
-
-			const lines = textContent.text.split("\n");
-			const output = lines.map((line) => theme.fg("toolOutput", line)).join("\n");
-			return new Text(`\n${output}`, 0, 0);
-		},
-	});
-
 	// =========================================================================
 	// Bash Tool
 	// =========================================================================
@@ -120,31 +44,34 @@ export default function (pi: ExtensionAPI) {
 		label: "bash",
 		description:
 			"Execute a bash command in the current working directory. Returns stdout and stderr. Output is truncated to last 2000 lines or 50KB (whichever is hit first).",
-		parameters: getBuiltInTools(process.cwd()).bash.parameters,
+		parameters: createBashTool(process.cwd()).parameters,
 
 		async execute(toolCallId, params, signal, onUpdate, ctx) {
-			const tools = getBuiltInTools(ctx.cwd);
-			return tools.bash.execute(toolCallId, params, signal, onUpdate);
+			return createBashTool(ctx.cwd).execute(toolCallId, params, signal, onUpdate);
 		},
 
-		renderCall(args, theme) {
+		renderCall(args, theme, context) {
+			const text = context.lastComponent ?? new Text("", 0, 0);
 			const command = args.command || "...";
 			const timeout = args.timeout as number | undefined;
 			const timeoutSuffix = timeout ? theme.fg("muted", ` (timeout ${timeout}s)`) : "";
 
-			return new Text(theme.fg("toolTitle", theme.bold(`$ ${command}`)) + timeoutSuffix, 0, 0);
+			text.setText(theme.fg("toolTitle", theme.bold(`$ ${command}`)) + timeoutSuffix);
+			return text;
 		},
 
-		renderResult(result, { expanded }, theme) {
-			// Minimal mode: show nothing in collapsed state
+		renderResult(result, { expanded }, theme, context) {
+			const text = context.lastComponent ?? new Text("", 0, 0);
+
 			if (!expanded) {
-				return new Text("", 0, 0);
+				text.setText("");
+				return text;
 			}
 
-			// Expanded mode: show full output
 			const textContent = result.content.find((c) => c.type === "text");
 			if (!textContent || textContent.type !== "text") {
-				return new Text("", 0, 0);
+				text.setText("");
+				return text;
 			}
 
 			const output = textContent.text
@@ -153,11 +80,8 @@ export default function (pi: ExtensionAPI) {
 				.map((line) => theme.fg("toolOutput", line))
 				.join("\n");
 
-			if (!output) {
-				return new Text("", 0, 0);
-			}
-
-			return new Text(`\n${output}`, 0, 0);
+			text.setText(output ? `\n${output}` : "");
+			return text;
 		},
 	});
 
@@ -169,37 +93,41 @@ export default function (pi: ExtensionAPI) {
 		label: "write",
 		description:
 			"Write content to a file. Creates the file if it doesn't exist, overwrites if it does. Automatically creates parent directories.",
-		parameters: getBuiltInTools(process.cwd()).write.parameters,
+		parameters: createWriteTool(process.cwd()).parameters,
 
 		async execute(toolCallId, params, signal, onUpdate, ctx) {
-			const tools = getBuiltInTools(ctx.cwd);
-			return tools.write.execute(toolCallId, params, signal, onUpdate);
+			return createWriteTool(ctx.cwd).execute(toolCallId, params, signal, onUpdate);
 		},
 
-		renderCall(args, theme) {
+		renderCall(args, theme, context) {
+			const text = context.lastComponent ?? new Text("", 0, 0);
 			const path = shortenPath(args.path || "");
 			const pathDisplay = path ? theme.fg("accent", path) : theme.fg("toolOutput", "...");
 			const lineCount = args.content ? args.content.split("\n").length : 0;
 			const lineInfo = lineCount > 0 ? theme.fg("muted", ` (${lineCount} lines)`) : "";
 
-			return new Text(`${theme.fg("toolTitle", theme.bold("write"))} ${pathDisplay}${lineInfo}`, 0, 0);
+			text.setText(`${theme.fg("toolTitle", theme.bold("write"))} ${pathDisplay}${lineInfo}`);
+			return text;
 		},
 
-		renderResult(result, { expanded }, theme) {
-			// Minimal mode: show nothing (file was written)
+		renderResult(result, { expanded }, theme, context) {
+			const text = context.lastComponent ?? new Text("", 0, 0);
+
 			if (!expanded) {
-				return new Text("", 0, 0);
+				text.setText("");
+				return text;
 			}
 
-			// Expanded mode: show error if any
 			if (result.content.some((c) => c.type === "text" && c.text)) {
 				const textContent = result.content.find((c) => c.type === "text");
 				if (textContent?.type === "text" && textContent.text) {
-					return new Text(`\n${theme.fg("error", textContent.text)}`, 0, 0);
+					text.setText(`\n${theme.fg("error", textContent.text)}`);
+					return text;
 				}
 			}
 
-			return new Text("", 0, 0);
+			text.setText("");
+			return text;
 		},
 	});
 
@@ -211,40 +139,42 @@ export default function (pi: ExtensionAPI) {
 		label: "edit",
 		description:
 			"Edit a file by replacing exact text. The oldText must match exactly (including whitespace). Use this for precise, surgical edits.",
-		parameters: getBuiltInTools(process.cwd()).edit.parameters,
+		parameters: createEditTool(process.cwd()).parameters,
 
 		async execute(toolCallId, params, signal, onUpdate, ctx) {
-			const tools = getBuiltInTools(ctx.cwd);
-			return tools.edit.execute(toolCallId, params, signal, onUpdate);
+			return createEditTool(ctx.cwd).execute(toolCallId, params, signal, onUpdate);
 		},
 
-		renderCall(args, theme) {
+		renderCall(args, theme, context) {
+			const text = context.lastComponent ?? new Text("", 0, 0);
 			const path = shortenPath(args.path || "");
 			const pathDisplay = path ? theme.fg("accent", path) : theme.fg("toolOutput", "...");
 
-			return new Text(`${theme.fg("toolTitle", theme.bold("edit"))} ${pathDisplay}`, 0, 0);
+			text.setText(`${theme.fg("toolTitle", theme.bold("edit"))} ${pathDisplay}`);
+			return text;
 		},
 
-		renderResult(result, { expanded }, theme) {
-			// Minimal mode: show nothing in collapsed state
+		renderResult(result, { expanded }, theme, context) {
+			const text = context.lastComponent ?? new Text("", 0, 0);
+
 			if (!expanded) {
-				return new Text("", 0, 0);
+				text.setText("");
+				return text;
 			}
 
-			// Expanded mode: show diff or error
 			const textContent = result.content.find((c) => c.type === "text");
 			if (!textContent || textContent.type !== "text") {
-				return new Text("", 0, 0);
+				text.setText("");
+				return text;
 			}
 
-			// For errors, show the error message
-			const text = textContent.text;
-			if (text.includes("Error") || text.includes("error")) {
-				return new Text(`\n${theme.fg("error", text)}`, 0, 0);
+			const content = textContent.text;
+			if (content.includes("Error") || content.includes("error")) {
+				text.setText(`\n${theme.fg("error", content)}`);
+			} else {
+				text.setText(`\n${theme.fg("toolOutput", content)}`);
 			}
-
-			// Otherwise show the text (would be nice to show actual diff here)
-			return new Text(`\n${theme.fg("toolOutput", text)}`, 0, 0);
+			return text;
 		},
 	});
 
@@ -256,44 +186,41 @@ export default function (pi: ExtensionAPI) {
 		label: "find",
 		description:
 			"Find files by name pattern (glob). Searches recursively from the specified path. Output limited to 200 results.",
-		parameters: getBuiltInTools(process.cwd()).find.parameters,
+		parameters: createFindTool(process.cwd()).parameters,
 
 		async execute(toolCallId, params, signal, onUpdate, ctx) {
-			const tools = getBuiltInTools(ctx.cwd);
-			return tools.find.execute(toolCallId, params, signal, onUpdate);
+			return createFindTool(ctx.cwd).execute(toolCallId, params, signal, onUpdate);
 		},
 
-		renderCall(args, theme) {
+		renderCall(args, theme, context) {
+			const text = context.lastComponent ?? new Text("", 0, 0);
 			const pattern = args.pattern || "";
 			const path = shortenPath(args.path || ".");
 			const limit = args.limit;
 
-			let text = `${theme.fg("toolTitle", theme.bold("find"))} ${theme.fg("accent", pattern)}`;
-			text += theme.fg("toolOutput", ` in ${path}`);
+			let display = `${theme.fg("toolTitle", theme.bold("find"))} ${theme.fg("accent", pattern)}`;
+			display += theme.fg("toolOutput", ` in ${path}`);
 			if (limit !== undefined) {
-				text += theme.fg("toolOutput", ` (limit ${limit})`);
+				display += theme.fg("toolOutput", ` (limit ${limit})`);
 			}
 
-			return new Text(text, 0, 0);
+			text.setText(display);
+			return text;
 		},
 
-		renderResult(result, { expanded }, theme) {
-			if (!expanded) {
-				// Minimal: just show count
-				const textContent = result.content.find((c) => c.type === "text");
-				if (textContent?.type === "text") {
-					const count = textContent.text.trim().split("\n").filter(Boolean).length;
-					if (count > 0) {
-						return new Text(theme.fg("muted", ` → ${count} files`), 0, 0);
-					}
-				}
-				return new Text("", 0, 0);
-			}
+		renderResult(result, { expanded }, theme, context) {
+			const text = context.lastComponent ?? new Text("", 0, 0);
 
-			// Expanded: show full results
 			const textContent = result.content.find((c) => c.type === "text");
 			if (!textContent || textContent.type !== "text") {
-				return new Text("", 0, 0);
+				text.setText("");
+				return text;
+			}
+
+			if (!expanded) {
+				const count = textContent.text.trim().split("\n").filter(Boolean).length;
+				text.setText(count > 0 ? theme.fg("muted", ` → ${count} files`) : "");
+				return text;
 			}
 
 			const output = textContent.text
@@ -302,7 +229,8 @@ export default function (pi: ExtensionAPI) {
 				.map((line) => theme.fg("toolOutput", line))
 				.join("\n");
 
-			return new Text(`\n${output}`, 0, 0);
+			text.setText(output ? `\n${output}` : "");
+			return text;
 		},
 	});
 
@@ -314,48 +242,45 @@ export default function (pi: ExtensionAPI) {
 		label: "grep",
 		description:
 			"Search file contents by regex pattern. Uses ripgrep for fast searching. Output limited to 200 matches.",
-		parameters: getBuiltInTools(process.cwd()).grep.parameters,
+		parameters: createGrepTool(process.cwd()).parameters,
 
 		async execute(toolCallId, params, signal, onUpdate, ctx) {
-			const tools = getBuiltInTools(ctx.cwd);
-			return tools.grep.execute(toolCallId, params, signal, onUpdate);
+			return createGrepTool(ctx.cwd).execute(toolCallId, params, signal, onUpdate);
 		},
 
-		renderCall(args, theme) {
+		renderCall(args, theme, context) {
+			const text = context.lastComponent ?? new Text("", 0, 0);
 			const pattern = args.pattern || "";
 			const path = shortenPath(args.path || ".");
 			const glob = args.glob;
 			const limit = args.limit;
 
-			let text = `${theme.fg("toolTitle", theme.bold("grep"))} ${theme.fg("accent", `/${pattern}/`)}`;
-			text += theme.fg("toolOutput", ` in ${path}`);
+			let display = `${theme.fg("toolTitle", theme.bold("grep"))} ${theme.fg("accent", `/${pattern}/`)}`;
+			display += theme.fg("toolOutput", ` in ${path}`);
 			if (glob) {
-				text += theme.fg("toolOutput", ` (${glob})`);
+				display += theme.fg("toolOutput", ` (${glob})`);
 			}
 			if (limit !== undefined) {
-				text += theme.fg("toolOutput", ` limit ${limit}`);
+				display += theme.fg("toolOutput", ` limit ${limit}`);
 			}
 
-			return new Text(text, 0, 0);
+			text.setText(display);
+			return text;
 		},
 
-		renderResult(result, { expanded }, theme) {
-			if (!expanded) {
-				// Minimal: just show match count
-				const textContent = result.content.find((c) => c.type === "text");
-				if (textContent?.type === "text") {
-					const count = textContent.text.trim().split("\n").filter(Boolean).length;
-					if (count > 0) {
-						return new Text(theme.fg("muted", ` → ${count} matches`), 0, 0);
-					}
-				}
-				return new Text("", 0, 0);
-			}
+		renderResult(result, { expanded }, theme, context) {
+			const text = context.lastComponent ?? new Text("", 0, 0);
 
-			// Expanded: show full results
 			const textContent = result.content.find((c) => c.type === "text");
 			if (!textContent || textContent.type !== "text") {
-				return new Text("", 0, 0);
+				text.setText("");
+				return text;
+			}
+
+			if (!expanded) {
+				const count = textContent.text.trim().split("\n").filter(Boolean).length;
+				text.setText(count > 0 ? theme.fg("muted", ` → ${count} matches`) : "");
+				return text;
 			}
 
 			const output = textContent.text
@@ -364,7 +289,8 @@ export default function (pi: ExtensionAPI) {
 				.map((line) => theme.fg("toolOutput", line))
 				.join("\n");
 
-			return new Text(`\n${output}`, 0, 0);
+			text.setText(output ? `\n${output}` : "");
+			return text;
 		},
 	});
 
@@ -376,42 +302,39 @@ export default function (pi: ExtensionAPI) {
 		label: "ls",
 		description:
 			"List directory contents with file sizes. Shows files and directories with their sizes. Output limited to 500 entries.",
-		parameters: getBuiltInTools(process.cwd()).ls.parameters,
+		parameters: createLsTool(process.cwd()).parameters,
 
 		async execute(toolCallId, params, signal, onUpdate, ctx) {
-			const tools = getBuiltInTools(ctx.cwd);
-			return tools.ls.execute(toolCallId, params, signal, onUpdate);
+			return createLsTool(ctx.cwd).execute(toolCallId, params, signal, onUpdate);
 		},
 
-		renderCall(args, theme) {
+		renderCall(args, theme, context) {
+			const text = context.lastComponent ?? new Text("", 0, 0);
 			const path = shortenPath(args.path || ".");
 			const limit = args.limit;
 
-			let text = `${theme.fg("toolTitle", theme.bold("ls"))} ${theme.fg("accent", path)}`;
+			let display = `${theme.fg("toolTitle", theme.bold("ls"))} ${theme.fg("accent", path)}`;
 			if (limit !== undefined) {
-				text += theme.fg("toolOutput", ` (limit ${limit})`);
+				display += theme.fg("toolOutput", ` (limit ${limit})`);
 			}
 
-			return new Text(text, 0, 0);
+			text.setText(display);
+			return text;
 		},
 
-		renderResult(result, { expanded }, theme) {
-			if (!expanded) {
-				// Minimal: just show entry count
-				const textContent = result.content.find((c) => c.type === "text");
-				if (textContent?.type === "text") {
-					const count = textContent.text.trim().split("\n").filter(Boolean).length;
-					if (count > 0) {
-						return new Text(theme.fg("muted", ` → ${count} entries`), 0, 0);
-					}
-				}
-				return new Text("", 0, 0);
-			}
+		renderResult(result, { expanded }, theme, context) {
+			const text = context.lastComponent ?? new Text("", 0, 0);
 
-			// Expanded: show full listing
 			const textContent = result.content.find((c) => c.type === "text");
 			if (!textContent || textContent.type !== "text") {
-				return new Text("", 0, 0);
+				text.setText("");
+				return text;
+			}
+
+			if (!expanded) {
+				const count = textContent.text.trim().split("\n").filter(Boolean).length;
+				text.setText(count > 0 ? theme.fg("muted", ` → ${count} entries`) : "");
+				return text;
 			}
 
 			const output = textContent.text
@@ -420,7 +343,8 @@ export default function (pi: ExtensionAPI) {
 				.map((line) => theme.fg("toolOutput", line))
 				.join("\n");
 
-			return new Text(`\n${output}`, 0, 0);
+			text.setText(output ? `\n${output}` : "");
+			return text;
 		},
 	});
 }
