@@ -1,6 +1,6 @@
 import type { ExtensionAPI, ExtensionContext } from "@earendil-works/pi-coding-agent";
 import { BorderedLoader, DynamicBorder } from "@earendil-works/pi-coding-agent";
-import { Container, Text } from "@earendil-works/pi-tui";
+import { Container, Input, Text } from "@earendil-works/pi-tui";
 import { complete, type UserMessage } from "@earendil-works/pi-ai";
 
 const EXTRACTION_PROMPT = `You are a question extraction assistant. Given the following assistant message, extract all questions the assistant asked the user. Return ONLY a JSON array of objects with "id" (number), "question" (string), and optional "context" (relevant quote). If no questions are found, return an empty array. Output valid JSON only, no markdown fences.`;
@@ -110,9 +110,10 @@ export default function (pi: ExtensionAPI) {
       const result = await ctx.ui.custom<boolean>((tui, theme, _kb, done) => {
         const container = new Container();
         let currentIdx = 0;
+        let inputMode = false;
+        const input = new Input();
 
         const renderQuestion = () => {
-          // Clear and rebuild
           while (container.children.length > 0) container.removeChild(container.children[0]);
 
           container.addChild(new DynamicBorder((s: string) => theme.fg("accent", s)));
@@ -129,7 +130,7 @@ export default function (pi: ExtensionAPI) {
           container.addChild(new Text(questionText, 1, 0));
           container.addChild(new Text("", 0, 0));
 
-          if (answers[currentIdx]) {
+          if (answers[currentIdx] && !inputMode) {
             container.addChild(new Text(
               theme.fg("success", "✓ Answer: ") + answers[currentIdx],
               1, 0,
@@ -138,10 +139,29 @@ export default function (pi: ExtensionAPI) {
           }
 
           container.addChild(new DynamicBorder((s: string) => theme.fg("dim", s)));
-          container.addChild(new Text(
-            theme.fg("dim", "↑↓ navigate • a answer • ← skip • enter next (no answer) • c cancel • d done"),
-            1, 0,
-          ));
+
+          if (inputMode) {
+            container.addChild(new Text(
+              theme.fg("accent", `Q${currentIdx + 1}: ${questions[currentIdx].question}`),
+              1, 0,
+            ));
+            container.addChild(new Text("", 0, 0));
+            if (answers[currentIdx]) {
+              input.setValue(answers[currentIdx]);
+            }
+            container.addChild(input);
+            container.addChild(new Text("", 0, 0));
+            container.addChild(new Text(
+              theme.fg("dim", "enter submit • esc back"),
+              1, 0,
+            ));
+          } else {
+            container.addChild(new Text(
+              theme.fg("dim", "↑↓ navigate • a answer • ← skip • enter next • c cancel • d done"),
+              1, 0,
+            ));
+          }
+
           container.addChild(new DynamicBorder((s: string) => theme.fg("dim", s)));
         };
 
@@ -151,6 +171,29 @@ export default function (pi: ExtensionAPI) {
           render: (w) => container.render(w),
           invalidate: () => container.invalidate(),
           handleInput: (data) => {
+            // While in input mode, route all keys to the embedded Input
+            if (inputMode) {
+              if (data === "escape") {
+                inputMode = false;
+                renderQuestion();
+                tui.requestRender();
+                return;
+              }
+              if (data === "enter" || data === "return") {
+                answers[currentIdx] = input.getValue();
+                inputMode = false;
+                // Auto-advance to next question
+                if (currentIdx < questions.length - 1) {
+                  currentIdx++;
+                }
+                renderQuestion();
+                tui.requestRender();
+                return;
+              }
+              input.handleInput(data);
+              return;
+            }
+
             if (data === "c" || data === "C") {
               done(false);
               return;
@@ -186,7 +229,6 @@ export default function (pi: ExtensionAPI) {
                 renderQuestion();
                 tui.requestRender();
               } else {
-                // Last question, skip = done
                 done(true);
               }
               return;
@@ -204,20 +246,13 @@ export default function (pi: ExtensionAPI) {
               return;
             }
 
-            // 'a' = answer current question via text input
+            // 'a' = enter input mode for current question
             if (data === "a" || data === "A") {
-              const answerInput = async () => {
-                const text = await ctx.ui.input(
-                  `Q${currentIdx + 1}: ${questions[currentIdx].question}`,
-                  answers[currentIdx] || "Type your answer...",
-                );
-                if (text !== undefined && text !== null) {
-                  answers[currentIdx] = text;
-                }
-                renderQuestion();
-                tui.requestRender();
-              };
-              answerInput();
+              inputMode = true;
+              input.setValue(answers[currentIdx]);
+              renderQuestion();
+              tui.setFocus(container);
+              tui.requestRender();
               return;
             }
           },
