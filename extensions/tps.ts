@@ -1,14 +1,16 @@
-import type { AssistantMessage } from "@mariozechner/pi-ai";
-import type { ExtensionAPI } from "@mariozechner/pi-coding-agent";
-
-function isAssistantMessage(message: unknown): message is AssistantMessage {
-	if (!message || typeof message !== "object") return false;
-	const role = (message as { role?: unknown }).role;
-	return role === "assistant";
-}
+import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 
 export default function (pi: ExtensionAPI) {
 	let agentStartMs: number | null = null;
+	let tpsEnabled = true;
+
+	pi.registerCommand("tps", {
+		description: "Toggle TPS performance notifications",
+		handler: async (_args, ctx) => {
+			tpsEnabled = !tpsEnabled;
+			ctx.ui.notify(`TPS notifications ${tpsEnabled ? "enabled" : "disabled"}`, "info");
+		},
+	});
 
 	pi.on("agent_start", () => {
 		agentStartMs = Date.now();
@@ -16,6 +18,7 @@ export default function (pi: ExtensionAPI) {
 
 	pi.on("agent_end", (event, ctx) => {
 		if (!ctx.hasUI) return;
+		if (!tpsEnabled) return;
 		if (agentStartMs === null) return;
 
 		const elapsedMs = Date.now() - agentStartMs;
@@ -29,7 +32,7 @@ export default function (pi: ExtensionAPI) {
 		let totalTokens = 0;
 
 		for (const message of event.messages) {
-			if (!isAssistantMessage(message)) continue;
+			if (message.role !== "assistant") continue;
 			input += message.usage.input || 0;
 			output += message.usage.output || 0;
 			cacheRead += message.usage.cacheRead || 0;
