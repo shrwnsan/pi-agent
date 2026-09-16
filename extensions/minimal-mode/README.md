@@ -4,10 +4,14 @@ Compact tool result summaries on top of pi's built-in renderers.
 
 ```
 Collapsed:                          Expanded (Ctrl+O or click):
-  ✓ 1.2s · 132 lines ▸               $ npm test
-  ✓ → 12 matches ▸                     ... full output ...
-  ✗ exit non-zero · 8 lines ▸
+  ✓ git status · 0.3s · 4 lines ▸     $ git status
+  ✓ grep /pat/ → 12 matches ▸           ... full output ...
+  Thinking… ▸
 ```
+
+Collapsed rows are a **single dim line** — glyph, command/query summary,
+duration/count, collapse caret. The `$ command` header is suppressed once
+the result lands, so long commands never wrap into a wall of text.
 
 ## Philosophy (v2)
 
@@ -18,11 +22,17 @@ longer replaces any of that**. It only adds what's still missing:
 
 | Tool | Collapsed (this extension) | Expanded |
 |------|----------------------------|----------|
-| `bash`  | `✓ 1.2s · 132 lines ▸` status line | built-in full output |
-| `find`  | `✓ → 12 files ▸` | built-in full output |
-| `grep`  | `✓ → 12 matches ▸` | built-in full output |
-| `ls`    | `✓ → 12 entries ▸` | built-in full output |
+| `bash`  | `✓ git status · 0.3s · 4 lines ▸` | built-in full output |
+| `find`  | `✓ find *.ts → 12 files ▸` | built-in full output |
+| `grep`  | `✓ grep /pat/ → 12 matches ▸` | built-in full output |
+| `ls`    | `✓ ls src → 12 entries ▸` | built-in full output |
+| thinking | `Thinking… ▸` (label configurable) | full thinking text |
 | `read` `write` `edit` | **untouched** — built-ins are superior | — |
+
+Note: summaries are **per tool call**. Amp-style cross-call grouping
+("Ran 4 commands" collapsing several calls into one row) isn't expressible
+with pi's current per-call renderer hooks — each tool call renders as its
+own component.
 
 ## Glyph tiers
 
@@ -52,8 +62,11 @@ without a Nerd Font, so resolution never guesses upward.
 
 - `glyphs` — tier: `"unicode"` (default), `"nerd"`, `"ascii"`
 - `overrides` — per-glyph surgical overrides on top of the resolved tier
-- `bashPreview` — keep ~5 preview lines under the bash status line when collapsed
+- `bashPreview` — keep ~5 preview lines under the bash one-liner when collapsed
   (default `false`: Amp-style, output fully hidden until expanded)
+- `thinkingLabel` — text shown for hidden thinking blocks
+  (default `"Thinking… ▸"`; the caret is the collapse affordance — click
+  or Ctrl+T to expand)
 
 ### Environment
 
