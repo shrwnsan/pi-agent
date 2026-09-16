@@ -22,6 +22,12 @@ result lands, so long commands never wrap into a wall of text. Expanded
 rows are the built-in rendering, untouched: full command header + complete
 output — no summary line in between.
 
+**Clicking**: one left-click anywhere on a wrapped row toggles that block.
+Rapid re-clicks (<350ms) are debounced, so a habitual double-click no
+longer toggles twice and cancel itself out. (Note: pi only counts a click
+when press and release land on the same terminal cell — click-and-drift is
+treated as text selection.)
+
 ## Philosophy (v2)
 
 Recent pi versions ship excellent built-in tool renderers: bash preview cards
