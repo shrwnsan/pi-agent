@@ -4,13 +4,17 @@ Compact tool result summaries on top of pi's built-in renderers. Uniform,
 single-color rows — one line per tool call.
 
 ```
-Collapsed:                          Expanded (Ctrl+O or click):
-  ✓ git status · 0.3s ▸               $ git status -s        ← full command header
-                                      ✓ 0.3s ▾               ← caret flips
-  ✓ grep /pat/ → 12 matches ▸         → 12 matches
-  ✓ edit src/foo.ts ▸                 ... full output (diff, file) ...
-  Thinking… ▸                         ... full thinking ...
+Running:                            Collapsed:                          Expanded (Ctrl+O or click):
+  ○ git clone … · 3.2s ▸              ✓ git status · 0.3s ▸               $ git status -s
+                                      ✓ grep /pat/ → 12 matches ▸         ✓ 0.3s ▾
+                                      ✓ edit src/foo.ts ▸                 → 12 matches
+                                      Thinking… ▸                         ... full output ...
 ```
+
+Rows collapse the moment execution starts — the `○` running line shows a
+live elapsed time (ticking via bash's partial updates; tools without
+partial updates may only refresh on completion). Expand while running to
+watch the built-in streaming preview; nothing is lost, just folded.
 
 Collapsed rows are a **single muted line** — glyph, command/query summary,
 duration, collapse caret. The `$ command` header is suppressed once the
@@ -33,6 +37,7 @@ longer replaces any of that**. It only adds what's still missing:
 | `read`  | `✓ read src/foo.ts ▸` | built-in full output |
 | `write` | `✓ write src/foo.ts ▸` | built-in full output |
 | `edit`  | `✓ edit src/foo.ts ▸` | built-in header + diff preview |
+| any, running | `○ git clone … · 3.2s ▸` | streaming preview |
 | thinking | `Thinking… ▸` (label configurable) | full thinking text |
 
 Note: summaries are **per tool call**. Amp-style cross-call grouping
