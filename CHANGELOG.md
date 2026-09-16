@@ -5,6 +5,11 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.3.12] - 2026-09-16
+
+### Added
+- **minimal-mode** — Temporary renderer instrumentation: render calls/results are counted per tool, and the first error from every delegated/expanded render is captured. `/minimal-debug` dumps the state; new errors also append to `~/.pi/agent/minimal-debug.log`. Diagnostic build for the expanded-rows report — will be removed once root-caused.
+
 ## [0.3.11] - 2026-09-16
 
 ### Fixed
