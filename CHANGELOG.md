@@ -16,6 +16,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **minimal-mode** — Promoted from single file to package: `extensions/minimal-mode/{index.ts, glyphs.ts, README.md}`.
 
 ### Added
+- **footer-path** — New extension: minimal footer `machine · repo · branch`, worktree-aware. Machine label appears only off-machine (SSH → short hostname, container → `box`, override via `FOOTER_MACHINE_NAME`). Worktree names derive from the `.worktrees/` path segment. Git probe runs once at session start; branch updates via `footerData.onBranchChange()`. Toggle with `/footer-path`. Token stats intentionally excluded — `tps` owns those.
 - **minimal-mode** — Glyph tier system: `unicode` (default, single-width glyphs shipped by pi's own TUI), `nerd` (opt-in Font Awesome PUA glyphs), `ascii` (dumb-terminal fallback). Resolution order: `PI_GLYPHS` env → `NERD_FONT` env → `~/.pi/agent/minimal-mode.json` → unicode. Per-glyph `overrides` supported. unicode glyphs on a Nerd Font terminal look fine; nerd glyphs without the font render as tofu — so auto-detection never guesses upward.
 
 ## [0.2.0] - 2026-05-31
