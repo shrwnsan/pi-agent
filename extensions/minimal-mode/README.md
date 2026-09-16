@@ -17,10 +17,10 @@ partial updates may only refresh on completion). Expand while running to
 watch the built-in streaming preview; nothing is lost, just folded.
 
 Collapsed rows are a **single muted line** — glyph, command/query summary,
-duration, collapse caret. The `$ command` header is suppressed once the
-result lands, so long commands never wrap into a wall of text. Expanded
-rows are the built-in rendering, untouched: full command header + complete
-output — no summary line in between.
+duration, collapse caret. The `$ command` header is suppressed from the
+moment execution starts, so long commands never wrap into a wall of text.
+Expanded rows are the built-in rendering, untouched: full command header +
+complete output — no summary line in between.
 
 **Clicking**: one left-click anywhere on a wrapped row toggles that block.
 Rapid re-clicks (<350ms) are debounced, so a habitual double-click no
