@@ -1,19 +1,17 @@
 /**
- * Footer Path — minimal footer: `[machine] repo · branch`, worktree-aware.
+ * Footer Path — minimal footer: `[machine] repo · branch` + pi's stats line.
  *
- * Replaces pi's default footer path display (absolute cwd + branch) with a
- * compact form:
+ * Replaces pi's default footer (which starts with the absolute cwd) with a
+ * compact two-line form:
  *
- *   [box] dotfiles · main                (container — default "tag" style)
- *   dotfiles · main                      (local machine — no machine segment)
- *   dotfiles · wt:experiment · main      (linked git worktree)
+ *   [box] dotfiles · main                             ← line 1 (this extension)
+ *   ↑225k ↓80k R6.4M CH99.6% 11.5%/1.0M   (zai) glm… ← line 2 (replicated stats)
  *
- * Machine label is shown only when this isn't the local machine. Contexts:
- * - SSH session (SSH_CONNECTION / SSH_TTY)          → short hostname
- * - Docker/devcontainer/AgentBox                    → "box"    (icon: cube)
- * - other containers/VMs via systemd-detect-virt    → "box" / short hostname
- * - WSL                                             → "wsl"    (icon: tux)
- * - manual override                                 → FOOTER_MACHINE_NAME env var
+ * Line 1 is the compact, worktree-aware path. Machine label is shown only
+ * when this isn't the local machine (see machineLabel() below). Line 2
+ * replicates pi's built-in token/context/model stats from the documented
+ * extension data path (ctx.getContextUsage(), ctx.sessionManager.getEntries(),
+ * ctx.model) so taking over the footer doesn't lose it.
  *
  * Display styles (machineStyle in ~/.pi/agent/footer-path.json):
  *   "tag"   (default)  [box] dotfiles · main   — machine demoted to metadata
@@ -26,8 +24,7 @@
  * tux (WSL). All Font Awesome 4 codepoints — actually present in the font.
  *
  * Worktrees: detected once at session start via `git rev-parse`; the name is
- * taken from the path segment after a `.worktrees/` directory when present,
- * falling back to the git dir basename.
+ * taken from the path segment after a `.worktrees/` directory when present.
  *
  * All probes (git + virtualization) run once at session start — nothing
  * subprocess-y in the render path. Branch updates come from
@@ -39,7 +36,7 @@ import { existsSync, readFileSync } from "node:fs";
 import { hostname } from "node:os";
 import { basename, join, resolve, sep } from "node:path";
 import type { ExtensionAPI, ExtensionContext, Theme } from "@earendil-works/pi-coding-agent";
-import { truncateToWidth } from "@earendil-works/pi-tui";
+import { truncateToWidth, visibleWidth } from "@earendil-works/pi-tui";
 
 type MachineContext = "container" | "remote" | "vm" | "wsl";
 type GlyphTier = "unicode" | "nerd" | "ascii";
@@ -164,6 +161,32 @@ function gitInfo(cwd: string): { repo: string; worktree: string | null } {
 	return parts;
 }
 
+// --- stats line (mirrors pi's built-in footer computation) ------------------
+
+interface UsageTotals {
+	input: number;
+	output: number;
+	cacheRead: number;
+	cacheWrite: number;
+	cost: number;
+}
+
+interface UsageLike {
+	input?: number;
+	output?: number;
+	cacheRead?: number;
+	cacheWrite?: number;
+	cost?: { total?: number };
+}
+
+function formatTokens(count: number): string {
+	if (count < 1000) return count.toString();
+	if (count < 10000) return `${(count / 1000).toFixed(1)}k`;
+	if (count < 1000000) return `${Math.round(count / 1000)}k`;
+	if (count < 10000000) return `${(count / 1000000).toFixed(1)}M`;
+	return `${Math.round(count / 1000000)}M`;
+}
+
 export default function footerPath(pi: ExtensionAPI) {
 	let enabled = false;
 
@@ -190,14 +213,117 @@ export default function footerPath(pi: ExtensionAPI) {
 				invalidate() {},
 				render(width: number): string[] {
 					const branch = footerData.getGitBranch();
+
+					// Line 1 — compact path
 					const chain: string[] = [parts.repo];
 					if (parts.worktree) chain.push(theme.fg("muted", `wt:${parts.worktree}`));
+					const getSessionName = (ctx.sessionManager as { getSessionName?: () => string | undefined })
+						.getSessionName;
+					const sessionName = getSessionName?.call(ctx.sessionManager);
+					if (sessionName) chain.push(theme.fg("muted", sessionName));
 					if (branch) chain.push(theme.fg("accent", branch));
 					const chainText = chain.join(theme.fg("muted", " · "));
 					const tag = machineSegment(theme);
-					const line =
-						tag && style === "tag" ? `${tag} ${chainText}` : tag ? [tag, chainText].join(theme.fg("muted", " · ")) : chainText;
-					return [truncateToWidth(line, width)];
+					const line1 =
+						tag && style === "tag"
+							? `${tag} ${chainText}`
+							: tag
+								? [tag, chainText].join(theme.fg("muted", " · "))
+								: chainText;
+					const lines = [truncateToWidth(line1, width)];
+
+					// Line 2 — token/context stats + model (mirrors built-in footer)
+					const totals: UsageTotals = { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, cost: 0 };
+					let latestCacheHitRate: number | undefined;
+					const add = (u: UsageLike): void => {
+						totals.input += u.input ?? 0;
+						totals.output += u.output ?? 0;
+						totals.cacheRead += u.cacheRead ?? 0;
+						totals.cacheWrite += u.cacheWrite ?? 0;
+						totals.cost += u.cost?.total ?? 0;
+					};
+					for (const entry of ctx.sessionManager.getEntries()) {
+						const e = entry as {
+							type: string;
+							message?: { role?: string; usage?: UsageLike };
+							usage?: UsageLike;
+						};
+						if (e.type === "message" && e.message?.role === "assistant" && e.message.usage) {
+							add(e.message.usage);
+							const u = e.message.usage;
+							const promptTokens = (u.input ?? 0) + (u.cacheRead ?? 0) + (u.cacheWrite ?? 0);
+							latestCacheHitRate =
+								promptTokens > 0 ? ((u.cacheRead ?? 0) / promptTokens) * 100 : undefined;
+						} else if (e.type === "message" && e.message?.role === "toolResult" && e.message.usage) {
+							add(e.message.usage);
+						} else if ((e.type === "branch_summary" || e.type === "compaction") && e.usage) {
+							add(e.usage);
+						}
+					}
+
+					const statsParts: string[] = [];
+					if (totals.input) statsParts.push(`↑${formatTokens(totals.input)}`);
+					if (totals.output) statsParts.push(`↓${formatTokens(totals.output)}`);
+					if (totals.cacheRead) statsParts.push(`R${formatTokens(totals.cacheRead)}`);
+					if (totals.cacheWrite) statsParts.push(`W${formatTokens(totals.cacheWrite)}`);
+					if ((totals.cacheRead > 0 || totals.cacheWrite > 0) && latestCacheHitRate !== undefined) {
+						statsParts.push(`CH${latestCacheHitRate.toFixed(1)}%`);
+					}
+					if (totals.cost) statsParts.push(`$${totals.cost.toFixed(3)}`);
+
+					const contextUsage = ctx.getContextUsage?.();
+					const contextWindow = contextUsage?.contextWindow ?? ctx.model?.contextWindow ?? 0;
+					const percentValue = contextUsage?.percent ?? 0;
+					const percentText = contextUsage?.percent != null ? `${percentValue.toFixed(1)}%` : "?";
+					const contextText = `${percentText}/${formatTokens(contextWindow)}`;
+					const contextStyled =
+						percentValue > 90
+							? theme.fg("error", contextText)
+							: percentValue > 70
+								? theme.fg("warning", contextText)
+								: contextText;
+					statsParts.push(contextStyled);
+
+					let statsLeft = statsParts.join(" ");
+					const model = ctx.model;
+					const thinking = ctx.thinkingLevel;
+					let right = model?.id ?? "no-model";
+					if (model?.reasoning && thinking) {
+						right = thinking === "off" ? `${right} • thinking off` : `${right} • ${thinking}`;
+					}
+					const providerCount = footerData.getAvailableProviderCount?.();
+					if (typeof providerCount === "number" && providerCount > 1 && model?.provider) {
+						right = `(${model.provider}) ${right}`;
+					}
+					let statsLeftWidth = visibleWidth(statsLeft);
+					if (statsLeftWidth > width) {
+						statsLeft = truncateToWidth(statsLeft, width, "...");
+						statsLeftWidth = visibleWidth(statsLeft);
+					}
+					const rightWidth = visibleWidth(right);
+					const minPadding = 2;
+					let line2: string;
+					if (statsLeftWidth + minPadding + rightWidth <= width) {
+						const padding = " ".repeat(width - statsLeftWidth - rightWidth);
+						line2 = theme.fg("dim", statsLeft) + padding + theme.fg("dim", right);
+					} else {
+						const available = width - statsLeftWidth - minPadding;
+						const rightText = available > 0 ? truncateToWidth(right, available, "") : "";
+						const padding = " ".repeat(Math.max(0, width - statsLeftWidth - visibleWidth(rightText)));
+						line2 = theme.fg("dim", statsLeft) + padding + theme.fg("dim", rightText);
+					}
+					lines.push(line2);
+
+					// Line 3 — extension statuses (setStatus), as the built-in does
+					const statuses = footerData.getExtensionStatuses?.();
+					if (statuses && statuses.size > 0) {
+						const sorted = Array.from(statuses.entries())
+							.sort(([a], [b]) => a.localeCompare(b))
+							.map(([, text]) => text.replace(/[\r\n\t]+/g, " ").replace(/ +/g, " ").trim());
+						lines.push(truncateToWidth(theme.fg("dim", sorted.join(" ")), width));
+					}
+
+					return lines;
 				},
 			};
 		});
@@ -210,7 +336,7 @@ export default function footerPath(pi: ExtensionAPI) {
 	});
 
 	pi.registerCommand("footer-path", {
-		description: "Toggle footer-path ([machine] repo · branch)",
+		description: "Toggle footer-path ([machine] repo · branch + stats)",
 		handler: async (_args, ctx) => {
 			if (!ctx.hasUI) return;
 			enabled = !enabled;

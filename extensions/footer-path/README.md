@@ -1,14 +1,18 @@
 # footer-path
 
-Minimal footer: `[machine] repo · branch`, worktree-aware.
+Minimal footer: `[machine] repo · branch` **+ pi's token stats line**, worktree-aware.
 
 ```
-[box] dotfiles · main                ← container or remote (default "tag" style)
-dotfiles · main                      ← local machine
-dotfiles · wt:experiment · main      ← linked git worktree
+[box] dotfiles · main
+↑225k ↓80k R6.4M CH99.6% 11.5%/1.0M        (zai) glm-5.3-flash • max
 ```
 
-Replaces pi's default footer path (absolute cwd + branch) with a compact form.
+Line 2 replicates pi's built-in stats from the documented extension data path
+(`ctx.getContextUsage()`, `ctx.sessionManager.getEntries()`, `ctx.model`) —
+taking over the footer doesn't lose the stats/model readout. Known cosmetic
+differences from the built-in: no `(sub)` subscription marker and no `(auto)`
+compact indicator (neither is exposed to extensions). Extension `setStatus`
+items still render on a third line, as built-in.
 
 ## Machine label
 
