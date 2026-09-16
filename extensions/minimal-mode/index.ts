@@ -3,9 +3,9 @@
  *
  * Collapsed rows are ONE uniform line per call, in all three states:
  *
- *   running:    ○ git clone … · 3.2s ▸     (elapsed ticks via partial updates)
- *   collapsed:  ✓ git status · 0.3s ▸
- *   failed:     ✗ npm test · 3.1s ▸
+ *   running:    ○ git clone … ▸
+ *   collapsed:  ✓ git status ▸
+ *   failed:     ✗ npm test ▸
  *   expanded:   $ git status -s            ← built-in header (full command)
  *               ... full output ...        ← built-in output, nothing else
  *
@@ -75,10 +75,6 @@ function truncateMiddle(text: string, max: number): string {
 	return `${flat.slice(0, half)}…${flat.slice(-half)}`;
 }
 
-function seconds(ms: number): string {
-	return `${(ms / 1000).toFixed(1)}s`;
-}
-
 /** Uniform collapsed row: glyph + summary + caret, single color by default. */
 function rowLine(
 	theme: Theme,
@@ -103,14 +99,15 @@ function tildePath(path: string): string {
 	return path;
 }
 
-/** Per-tool timing state, shared by renderCall/renderResult at draw time. */
+/** Per-tool start times, shared by renderCall/renderResult at draw time: lets
+ *  the collapsed header tell "executing" from "not started yet" so the built-in
+ *  `$ command` header stays suppressed while a call runs. */
 interface ToolClock {
 	starts: Map<string, number>;
-	durations: Map<string, number>;
 }
 
 function newClock(): ToolClock {
-	return { starts: new Map(), durations: new Map() };
+	return { starts: new Map() };
 }
 
 function prune(map: Map<string, number>): void {
@@ -231,25 +228,12 @@ export default function minimalMode(pi: ExtensionAPI) {
 			{
 				render(width: number): string[] {
 					try {
-						const durationMs = clock.durations.get(toolCallId);
-						const hasResult = resultsById.has(toolCallId);
-						// Done (executed this session) or restored (result exists from the
-						// restored session): the one-liner in the result region owns the row.
-						if (durationMs !== undefined || hasResult) return [];
+						// A final result exists (executed this session or restored): the
+						// one-liner in the result region owns the row.
+						if (resultsById.has(toolCallId)) return [];
 						const startedAt = clock.starts.get(toolCallId);
 						if (startedAt !== undefined) {
-							const summary = [runningSummary, seconds(Date.now() - startedAt)]
-								.filter(Boolean)
-								.join(" · ");
-							const line = rowLine(
-								theme,
-								glyphs,
-								glyphs.running,
-								true,
-								summary,
-								glyphs.collapsed,
-								statusColor,
-							);
+							const line = rowLine(theme, glyphs, glyphs.running, true, runningSummary, glyphs.collapsed, statusColor);
 							return [truncateToWidth(line, width)];
 						}
 						return callComponent.render(width); // not started → built-in header
@@ -267,7 +251,7 @@ export default function minimalMode(pi: ExtensionAPI) {
 		);
 	}
 
-	// --- bash: `○ git clone … · 3.2s ▸` → `✓ git status · 0.3s ▸` ------------
+	// --- bash: `○ git clone … ▸` → `✓ git status ▸` ------------
 	{
 		const toolName = "bash";
 		const clock = newClock();
@@ -278,13 +262,7 @@ export default function minimalMode(pi: ExtensionAPI) {
 				const fresh = createBashToolDefinition(ctx.cwd);
 				prune(clock.starts);
 				clock.starts.set(toolCallId, Date.now());
-				const started = Date.now();
-				try {
-					return await fresh.execute(toolCallId, params, signal, onUpdate, ctx);
-				} finally {
-					prune(clock.durations);
-					clock.durations.set(toolCallId, Date.now() - started);
-				}
+				return fresh.execute(toolCallId, params, signal, onUpdate, ctx);
 			},
 			renderCall(args, theme, context) {
 				debugCall(`${toolName}:renderCall`);
@@ -314,10 +292,7 @@ export default function minimalMode(pi: ExtensionAPI) {
 				if (options.isPartial) return new Text("", 0, 0);
 
 				const args = (context as { args?: { command?: string } }).args;
-				const durationMs = clock.durations.get(context.toolCallId);
-				const duration = durationMs !== undefined ? seconds(durationMs) : "";
-				const command = truncateMiddle(args?.command ?? "", 48);
-				const summary = [command, duration].filter(Boolean).join(" · ");
+				const summary = truncateMiddle(args?.command ?? "", 48);
 				const one = rowLine(theme, glyphs, glyphs.check, context.isError !== true, summary, glyphs.collapsed, statusColor);
 				if (config.bashPreview) {
 					const preview = textOutput(result)
@@ -332,7 +307,7 @@ export default function minimalMode(pi: ExtensionAPI) {
 		});
 	}
 
-	// --- find/grep/ls: `○ grep /pat/ ▸` → `✓ grep /pat/ · 0.2s → 12 matches ▸`
+	// --- find/grep/ls: `○ grep /pat/ ▸` → `✓ grep /pat/ → 12 matches ▸`
 	for (const [toolName, create, noun] of [
 		["find", createFindToolDefinition, "files"],
 		["grep", createGrepToolDefinition, "matches"],
@@ -346,13 +321,7 @@ export default function minimalMode(pi: ExtensionAPI) {
 				const fresh = create(ctx.cwd) as ToolDefinition<any, any, any>;
 				prune(clock.starts);
 				clock.starts.set(toolCallId, Date.now());
-				const started = Date.now();
-				try {
-					return await fresh.execute(toolCallId, params, signal, onUpdate, ctx);
-				} finally {
-					prune(clock.durations);
-					clock.durations.set(toolCallId, Date.now() - started);
-				}
+				return fresh.execute(toolCallId, params, signal, onUpdate, ctx);
 			},
 			renderCall(args, theme, context) {
 				debugCall(`${toolName}:renderCall`);
@@ -387,9 +356,7 @@ export default function minimalMode(pi: ExtensionAPI) {
 							: toolName;
 				const countNum = textOutput(result).trimEnd().split("\n").filter(Boolean).length;
 				const countPart = context.isError !== true ? `${glyphs.arrow} ${countNum} ${noun}` : "failed";
-				const duration = clock.durations.get(context.toolCallId);
-				const durationText = duration !== undefined ? seconds(duration) : "";
-				const summary = [query, durationText, countPart].filter(Boolean).join(" · ");
+				const summary = [query, countPart].filter(Boolean).join(" ");
 				return withClickDebounce(
 					new Text(rowLine(theme, glyphs, glyphs.check, context.isError !== true, summary, glyphs.collapsed, statusColor), 0, 0),
 					context.toolCallId,
@@ -398,7 +365,7 @@ export default function minimalMode(pi: ExtensionAPI) {
 		});
 	}
 
-	// --- read/write/edit: `○ edit src/foo.ts ▸` → `✓ edit src/foo.ts · 0.1s ▸`
+	// --- read/write/edit: `○ edit src/foo.ts ▸` → `✓ edit src/foo.ts ▸`
 	for (const [toolName, create] of [
 		["read", createReadToolDefinition],
 		["write", createWriteToolDefinition],
@@ -412,13 +379,7 @@ export default function minimalMode(pi: ExtensionAPI) {
 				const fresh = create(ctx.cwd) as ToolDefinition<any, any, any>;
 				prune(clock.starts);
 				clock.starts.set(toolCallId, Date.now());
-				const started = Date.now();
-				try {
-					return await fresh.execute(toolCallId, params, signal, onUpdate, ctx);
-				} finally {
-					prune(clock.durations);
-					clock.durations.set(toolCallId, Date.now() - started);
-				}
+				return fresh.execute(toolCallId, params, signal, onUpdate, ctx);
 			},
 			renderCall(args, theme, context) {
 				debugCall(`${toolName}:renderCall`);
@@ -442,9 +403,7 @@ export default function minimalMode(pi: ExtensionAPI) {
 
 				const a = (context as { args?: Record<string, unknown> }).args ?? {};
 				const path = typeof a.path === "string" ? truncateMiddle(tildePath(a.path), 40) : "";
-				const durationMs = clock.durations.get(context.toolCallId);
-				const duration = durationMs !== undefined ? seconds(durationMs) : "";
-				const summary = [`${toolName} ${path}`.trim(), duration].filter(Boolean).join(" · ");
+				const summary = `${toolName} ${path}`.trim();
 				return withClickDebounce(
 					new Text(rowLine(theme, glyphs, glyphs.check, context.isError !== true, summary, glyphs.collapsed, statusColor), 0, 0),
 					context.toolCallId,

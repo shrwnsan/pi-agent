@@ -5,6 +5,11 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.3.15] - 2026-09-16
+
+### Changed
+- **minimal-mode** — Dropped the duration segment from one-liner rows (`✓ git status · 0.3s ▸` → `✓ git status ▸`, running `○ git clone … · 3.2s ▸` → `○ git clone … ▸`). The collapsed timing was unreliable (it only ticked on redraws and measured the execute wrapper, not the tool) and disagreed with the built-in expanded timer ("Took X.YZs"). Timing now belongs to the expanded view alone. Removed the dead `durations` clock and `seconds()` helper; `starts` remains so the running line can keep the built-in header suppressed.
+
 ## [0.3.14] - 2026-09-16
 
 ### Fixed

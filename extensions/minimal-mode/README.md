@@ -5,19 +5,20 @@ single-color rows — one line per tool call.
 
 ```
 Running:                            Collapsed:                          Expanded (Ctrl+O or click):
-  ○ git clone … · 3.2s ▸              ✓ git status · 0.3s ▸               $ git status -s
+  ○ git clone … ▸                     ✓ git status ▸                      $ git status -s
                                       ✓ grep /pat/ → 12 matches ▸         ... full output ...
                                       ✓ edit src/foo.ts ▸
                                       Thinking… ▸
 ```
 
-Rows collapse the moment execution starts — the `○` running line shows a
-live elapsed time (ticking via bash's partial updates; tools without
-partial updates may only refresh on completion). Expand while running to
-watch the built-in streaming preview; nothing is lost, just folded.
+Rows collapse the moment execution starts — the `○` running line replaces
+the command header so long commands never wrap into a wall of text. Expand
+while running to watch the built-in streaming preview; nothing is lost,
+just folded.
 
 Collapsed rows are a **single muted line** — glyph, command/query summary,
-duration, collapse caret. The `$ command` header is suppressed from the
+collapse caret. Timing is the expanded view's job: pi's built-in rendering
+shows the exact "Took X.YZs". The `$ command` header is suppressed from the
 moment execution starts, so long commands never wrap into a wall of text.
 Expanded rows are the built-in rendering, untouched: full command header +
 complete output — no summary line in between.
@@ -37,14 +38,14 @@ longer replaces any of that**. It only adds what's still missing:
 
 | Tool | Collapsed (this extension) | Expanded |
 |------|----------------------------|----------|
-| `bash`  | `✓ git status · 0.3s ▸` | built-in header + full output |
+| `bash`  | `✓ git status ▸` | built-in header + full output |
 | `find`  | `✓ find *.ts → 12 files ▸` | built-in full output |
 | `grep`  | `✓ grep /pat/ → 12 matches ▸` | built-in full output |
 | `ls`    | `✓ ls src → 12 entries ▸` | built-in full output |
 | `read`  | `✓ read src/foo.ts ▸` | built-in full output |
 | `write` | `✓ write src/foo.ts ▸` | built-in full output |
 | `edit`  | `✓ edit src/foo.ts ▸` | built-in header + diff preview |
-| any, running | `○ git clone … · 3.2s ▸` | streaming preview |
+| any, running | `○ git clone … ▸` | streaming preview |
 | thinking | `Thinking… ▸` (label configurable) | full thinking text |
 
 Note: summaries are **per tool call**. Amp-style cross-call grouping
