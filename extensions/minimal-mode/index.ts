@@ -173,12 +173,27 @@ export default function minimalMode(pi: ExtensionAPI) {
 				}
 			},
 			renderCall(args, theme, context) {
-				// Once the result has landed, the summary in renderResult is the
-				// whole collapsed row — drop the `$ command` header.
-				if (!context.expanded && durations.has(context.toolCallId)) {
-					return new Text("", 0, 0);
+				if (context.expanded) {
+					return orig.renderCall ? orig.renderCall(args, theme, context) : new Text("", 0, 0);
 				}
-				return orig.renderCall ? orig.renderCall(args, theme, context) : new Text("", 0, 0);
+				// Collapsed: pi caches the returned component (lastComponent pattern)
+				// and does NOT re-invoke renderCall when the result lands — return a
+				// live component that checks completion at draw time. Once the
+				// duration is recorded, the one-liner in the result region owns the
+				// whole row and the header renders nothing.
+				const toolCallId = context.toolCallId;
+				const callComponent = orig.renderCall
+					? orig.renderCall(args, theme, context)
+					: new Text("", 0, 0);
+				return {
+					render(width: number): string[] {
+						if (durations.has(toolCallId)) return [];
+						return callComponent.render(width);
+					},
+					invalidate() {
+						callComponent.invalidate();
+					},
+				};
 			},
 			renderResult(result, options, theme, context) {
 				if (options.isPartial) {
@@ -239,10 +254,24 @@ export default function minimalMode(pi: ExtensionAPI) {
 				return result;
 			},
 			renderCall(args, theme, context) {
-				if (!context.expanded && completed.has(context.toolCallId)) {
-					return new Text("", 0, 0);
+				if (context.expanded) {
+					return orig.renderCall ? orig.renderCall(args, theme, context) : new Text("", 0, 0);
 				}
-				return orig.renderCall ? orig.renderCall(args, theme, context) : new Text("", 0, 0);
+				// Collapsed: same live-component pattern as bash — hide the header
+				// at draw time once this call has completed.
+				const toolCallId = context.toolCallId;
+				const callComponent = orig.renderCall
+					? orig.renderCall(args, theme, context)
+					: new Text("", 0, 0);
+				return {
+					render(width: number): string[] {
+						if (completed.has(toolCallId)) return [];
+						return callComponent.render(width);
+					},
+					invalidate() {
+						callComponent.invalidate();
+					},
+				};
 			},
 			renderResult(result, options, theme, context) {
 				if (options.isPartial) {
