@@ -156,6 +156,36 @@ export default function minimalMode(pi: ExtensionAPI) {
 	const glyphs = resolveGlyphs(config);
 	const statusColor = config.statusColor === true;
 
+	// --- temporary debug instrumentation ---
+	const debug = { calls: new Map<string, number>(), lastError: new Map<string, string>() };
+	function debugCall(label: string): void {
+		debug.calls.set(label, (debug.calls.get(label) ?? 0) + 1);
+	}
+	function debugError(label: string, err: unknown): void {
+		const message = err instanceof Error ? err.message : String(err);
+		if (debug.lastError.get(label) !== message) debug.lastError.set(label, message);
+	}
+	function instrument<T>(label: string, fn: () => T): T {
+		debugCall(label);
+		try {
+			return fn();
+		} catch (err) {
+			debugError(label, err);
+			return new Text("", 0, 0) as T;
+		}
+	}
+	pi.registerCommand("minimal-debug", {
+		description: "Dump minimal-mode renderer debug state",
+		handler: async (_args, ctx) => {
+			if (!ctx.hasUI) return;
+			const lines = ["minimal-mode debug:"];
+			for (const [k, v] of debug.calls) lines.push(`calls ${k}: ${v}`);
+			for (const [k, v] of debug.lastError) lines.push(`LAST ERROR ${k}: ${v}`);
+			if (debug.calls.size === 0 && debug.lastError.size === 0) lines.push("(nothing recorded)");
+			ctx.ui.notify(lines.join("\n"));
+		},
+	});
+
 	// Hidden thinking blocks: label with a collapse affordance
 	pi.on("session_start", async (_event, ctx) => {
 		if (!ctx.hasUI) return;
@@ -180,12 +210,17 @@ export default function minimalMode(pi: ExtensionAPI) {
 		context: { expanded?: boolean; toolCallId: string },
 		clock: ToolClock,
 		runningSummary: string,
+		toolName: string,
 	): Component {
 		if (context.expanded) {
-			const component = origCall ? origCall(args, theme, cleanContext(context)) : new Text("", 0, 0);
+			const component = instrument(`${toolName}:call-expanded`, () =>
+				origCall ? origCall(args, theme, cleanContext(context)) : new Text("", 0, 0),
+			);
 			return withClickDebounce(component, context.toolCallId);
 		}
-		const callComponent = origCall ? origCall(args, theme, cleanContext(context)) : new Text("", 0, 0);
+		const callComponent = instrument(`${toolName}:call`, () =>
+			origCall ? origCall(args, theme, cleanContext(context)) : new Text("", 0, 0),
+		);
 		const toolCallId = context.toolCallId;
 		return withClickDebounce(
 			{
@@ -220,6 +255,7 @@ export default function minimalMode(pi: ExtensionAPI) {
 
 	// --- bash: `○ git clone … · 3.2s ▸` → `✓ git status · 0.3s ▸` ------------
 	{
+		const toolName = "bash";
 		const clock = newClock();
 		const orig = createBashToolDefinition(process.cwd());
 		pi.registerTool({
@@ -237,6 +273,7 @@ export default function minimalMode(pi: ExtensionAPI) {
 				}
 			},
 			renderCall(args, theme, context) {
+				debugCall(`${toolName}:renderCall`);
 				return liveCallHeader(
 					orig.renderCall?.bind(orig),
 					args,
@@ -244,14 +281,18 @@ export default function minimalMode(pi: ExtensionAPI) {
 					context,
 					clock,
 					truncateMiddle(args?.command ?? "", 48),
+					toolName,
 				);
 			},
 			renderResult(result, options, theme, context) {
+				debugCall(`${toolName}:renderResult${options.expanded ? "+x" : options.isPartial ? "+p" : ""}`);
 				// Expanded (running or done): built-in rendering, untouched.
 				if (options.expanded) {
-					const component = orig.renderResult
-						? orig.renderResult(result as AgentToolResult<any>, options, theme, cleanContext(context))
-						: new Text(textOutput(result), 0, 0);
+					const component = instrument(`${toolName}:result-expanded`, () =>
+						orig.renderResult
+							? orig.renderResult(result as AgentToolResult<any>, options, theme, cleanContext(context))
+							: new Text(textOutput(result), 0, 0),
+					);
 					return withClickDebounce(component, context.toolCallId);
 				}
 				// Collapsed + running: the live header owns the row.
@@ -299,6 +340,7 @@ export default function minimalMode(pi: ExtensionAPI) {
 				}
 			},
 			renderCall(args, theme, context) {
+				debugCall(`${toolName}:renderCall`);
 				const a = (args ?? {}) as Record<string, unknown>;
 				const summary =
 					typeof a.pattern === "string"
@@ -306,13 +348,16 @@ export default function minimalMode(pi: ExtensionAPI) {
 						: typeof a.path === "string"
 							? `${toolName} ${truncateMiddle(tildePath(a.path), 32)}`
 							: toolName;
-				return liveCallHeader(orig.renderCall?.bind(orig), args, theme, context, clock, summary);
+				return liveCallHeader(orig.renderCall?.bind(orig), args, theme, context, clock, summary, toolName);
 			},
 			renderResult(result, options, theme, context) {
+				debugCall(`${toolName}:renderResult${options.expanded ? "+x" : options.isPartial ? "+p" : ""}`);
 				if (options.expanded) {
-					const component = orig.renderResult
-						? orig.renderResult(result as AgentToolResult<any>, options, theme, cleanContext(context))
-						: new Text(textOutput(result), 0, 0);
+					const component = instrument(`${toolName}:result-expanded`, () =>
+						orig.renderResult
+							? orig.renderResult(result as AgentToolResult<any>, options, theme, cleanContext(context))
+							: new Text(textOutput(result), 0, 0),
+					);
 					return withClickDebounce(component, context.toolCallId);
 				}
 				if (options.isPartial) return new Text("", 0, 0);
@@ -360,16 +405,20 @@ export default function minimalMode(pi: ExtensionAPI) {
 				}
 			},
 			renderCall(args, theme, context) {
+				debugCall(`${toolName}:renderCall`);
 				const a = (args ?? {}) as Record<string, unknown>;
 				const summary =
 					typeof a.path === "string" ? `${toolName} ${truncateMiddle(tildePath(a.path), 40)}` : toolName;
-				return liveCallHeader(orig.renderCall?.bind(orig), args, theme, context, clock, summary);
+				return liveCallHeader(orig.renderCall?.bind(orig), args, theme, context, clock, summary, toolName);
 			},
 			renderResult(result, options, theme, context) {
+				debugCall(`${toolName}:renderResult${options.expanded ? "+x" : options.isPartial ? "+p" : ""}`);
 				if (options.expanded) {
-					const component = orig.renderResult
-						? orig.renderResult(result as AgentToolResult<any>, options, theme, cleanContext(context))
-						: new Text(textOutput(result), 0, 0);
+					const component = instrument(`${toolName}:result-expanded`, () =>
+						orig.renderResult
+							? orig.renderResult(result as AgentToolResult<any>, options, theme, cleanContext(context))
+							: new Text(textOutput(result), 0, 0),
+					);
 					return withClickDebounce(component, context.toolCallId);
 				}
 				if (options.isPartial) return new Text("", 0, 0);
