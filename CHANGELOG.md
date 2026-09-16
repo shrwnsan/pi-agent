@@ -5,6 +5,11 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.3.11] - 2026-09-16
+
+### Fixed
+- **minimal-mode** — The bold tool-name fallback line (`bash` / `read` / `write` / `edit`) above collapsed one-liners is gone. Root cause: built-in renderers reuse `context.lastComponent` and call methods on it (bash: `setText`); once minimal-mode's custom component was stored there, every later built-in invocation threw `TypeError`, and pi's `catch` rendered `createCallFallback()` — the bare bold tool name. All delegations now pass `{...context, lastComponent: undefined}` so built-ins rebuild their own components cleanly.
+
 ## [0.3.10] - 2026-09-16
 
 ### Reverted
