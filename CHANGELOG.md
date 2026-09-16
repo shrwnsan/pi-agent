@@ -5,6 +5,12 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.3.6] - 2026-09-16
+
+### Changed
+- **minimal-mode** — Row lines are now uniform single-color (muted), including the ✓/✗ glyph. Line counts dropped from bash summaries (inaccurate vs visible output); duration stays. Opt back into colored status glyphs with `"statusColor": true`.
+- **minimal-mode** — `read`, `write`, and `edit` now get the same single-line collapsed treatment (`✓ edit src/foo.ts ▸`) with the header suppressed after completion; expanding restores the built-in header + diff preview below the `▾` summary line.
+
 ## [0.3.5] - 2026-09-16
 
 ### Fixed

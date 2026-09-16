@@ -1,18 +1,20 @@
 # minimal-mode
 
-Compact tool result summaries on top of pi's built-in renderers.
+Compact tool result summaries on top of pi's built-in renderers. Uniform,
+single-color rows — one line per tool call.
 
 ```
 Collapsed:                          Expanded (Ctrl+O or click):
-  ✓ git status · 0.3s · 4 lines ▸     $ git status -s        ← full command header
-                                      ✓ 0.3s · 4 lines ▾     ← caret flips
+  ✓ git status · 0.3s ▸               $ git status -s        ← full command header
+                                      ✓ 0.3s ▾               ← caret flips
   ✓ grep /pat/ → 12 matches ▸         → 12 matches
-  Thinking… ▸                         ... full output ...
+  ✓ edit src/foo.ts ▸                 ... full output (diff, file) ...
+  Thinking… ▸                         ... full thinking ...
 ```
 
-Collapsed rows are a **single dim line** — glyph, command/query summary,
-duration/count, collapse caret. The `$ command` header is suppressed once
-the result lands, so long commands never wrap into a wall of text. Expanded
+Collapsed rows are a **single muted line** — glyph, command/query summary,
+duration, collapse caret. The `$ command` header is suppressed once the
+result lands, so long commands never wrap into a wall of text. Expanded
 rows keep the summary with the caret flipped to `▾`, above the full output.
 
 ## Philosophy (v2)
@@ -24,12 +26,14 @@ longer replaces any of that**. It only adds what's still missing:
 
 | Tool | Collapsed (this extension) | Expanded |
 |------|----------------------------|----------|
-| `bash`  | `✓ git status · 0.3s · 4 lines ▸` | built-in full output |
+| `bash`  | `✓ git status · 0.3s ▸` | built-in header + full output |
 | `find`  | `✓ find *.ts → 12 files ▸` | built-in full output |
 | `grep`  | `✓ grep /pat/ → 12 matches ▸` | built-in full output |
 | `ls`    | `✓ ls src → 12 entries ▸` | built-in full output |
+| `read`  | `✓ read src/foo.ts ▸` | built-in full output |
+| `write` | `✓ write src/foo.ts ▸` | built-in full output |
+| `edit`  | `✓ edit src/foo.ts ▸` | built-in header + diff preview |
 | thinking | `Thinking… ▸` (label configurable) | full thinking text |
-| `read` `write` `edit` | **untouched** — built-ins are superior | — |
 
 Note: summaries are **per tool call**. Amp-style cross-call grouping
 ("Ran 4 commands" collapsing several calls into one row) isn't expressible
@@ -69,6 +73,8 @@ without a Nerd Font, so resolution never guesses upward.
 - `thinkingLabel` — text shown for hidden thinking blocks
   (default `"Thinking… ▸"`; the caret is the collapse affordance — click
   or Ctrl+T to expand)
+- `statusColor` — color the ✓/✗ glyph green/red (`true`) or keep rows
+  uniform muted (default `false`)
 
 ### Environment
 

@@ -79,6 +79,8 @@ export interface MinimalModeConfig {
 	bashPreview?: boolean;
 	/** Label for hidden thinking blocks (default: "Thinking… ▸"). */
 	thinkingLabel?: string;
+	/** Color the ✓/✗ glyph green/red (default: false — uniform muted rows). */
+	statusColor?: boolean;
 }
 
 const CONFIG_PATH = join(homedir(), ".pi", "agent", "minimal-mode.json");
