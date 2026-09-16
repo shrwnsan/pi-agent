@@ -5,6 +5,16 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.3.1] - 2026-09-16
+
+### Added
+- **footer-path** — Virtualization probes: VMs via `systemd-detect-virt -v` (label = short hostname), non-Docker containers via `-c` (label = `box`), WSL via `WSL_DISTRO_NAME`/`/proc/version` (label = `wsl`). All run once at session start alongside the git probe.
+- **footer-path** — `machineStyle` display config in `~/.pi/agent/footer-path.json`: `"tag"` (new default — dim bracketed `[box] repo · branch`, machine demoted to metadata), `"dot"` (previous behavior), `"glyph"` (icon + label), `"none"`.
+- **footer-path** — Nerd Font context icons for glyph style: cube (container), server (SSH), desktop (VM), tux (WSL); unicode tier uses `▣`. Tier resolution matches minimal-mode (`PI_GLYPHS` → `NERD_FONT` → config → unicode).
+
+### Changed
+- **footer-path** — Default machine display changed from a plain chain segment (`box · dotfiles · main`) to a dim bracketed tag (`[box] dotfiles · main`); previous style remains available as `"machineStyle": "dot"`.
+
 ## [0.3.0] - 2026-09-16
 
 ### Changed
