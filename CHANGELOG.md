@@ -28,18 +28,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [0.3.11] - 2026-09-16
 
 ### Fixed
-- **minimal-mode** — The bold tool-name fallback line (`bash` / `read` / `write` / `edit`) above collapsed one-liners is gone. Root cause: built-in renderers reuse `context.lastComponent` and call methods on it (bash: `setText`); once minimal-mode's custom component was stored there, every later built-in invocation threw `TypeError`, and pi's `catch` rendered `createCallFallback()` — the bare bold tool name. All delegations now pass `{...context, lastComponent: undefined}` so built-ins rebuild their own components cleanly.
+- **minimal-mode** — The bold tool-name fallback line (`bash` / `read` / `write` / `edit`) above collapsed one-liners is gone. Root cause: built-in renderers reuse `context.lastComponent` and call methods on it (bash: `setText`); once minimal-mode's custom component was stored there, every later built-in invocation threw `TypeError`, and pi's `catch` rendered `createCallFallback()` — the bare bold tool name. All delegations now pass `{...context, lastComponent: undefined}` so built-ins rebuild their own components cleanly. Expanded delegations and bash preview lines are click-debounced like the one-liners. (Re-lands the durable parts of the abandoned v0.4.0 rewrite.)
 
 ## [0.3.10] - 2026-09-16
 
 ### Reverted
-- **minimal-mode** — Reverted v0.4.0 (`lastComponent` isolation rewrite): it regressed to rendering full raw output for every wrapped tool (as if Ctrl+O were stuck). Rolled back to the v0.3.9 behavior — right UX, with the known cosmetic tool-name fallback line. The `lastComponent` fix will return once it passes an offline render harness.
-
-## [0.4.0] - 2026-09-16
-
-### Fixed
-- **minimal-mode** — Collapsed rows showed a bold tool-name line (`bash` / `read` / `write` / `edit`) above the one-liner. Root cause: built-in `renderCall` implementations reuse `context.lastComponent` and call methods on it (e.g. `setText`) — but after our custom component was stored there, those calls threw `TypeError`, and pi's `catch` fell back to the bare tool name. Expanded delegations now pass a clean context (`lastComponent: undefined`) so built-ins rebuild their own components; our custom components never leak into `lastComponent` again. The collapsed `✓ one-liner ▸` is now the ONLY line — no label, no header.
-- **minimal-mode** — Bash bashPreview lines and expanded delegations are click-debounced like the one-liners.
+- **minimal-mode** — Reverted the v0.4.0 rewrite (`lastComponent` isolation; never tagged or released): it regressed to rendering full raw output for every wrapped tool (as if Ctrl+O were stuck). Rolled back to the v0.3.9 behavior — right UX, with the known cosmetic tool-name fallback line. The `lastComponent` fix re-landed in 0.3.11 once it stopped poisoning `lastComponent` for real.
 
 ## [0.3.9] - 2026-09-16
 
