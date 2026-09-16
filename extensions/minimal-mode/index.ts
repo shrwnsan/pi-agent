@@ -226,7 +226,10 @@ export default function minimalMode(pi: ExtensionAPI) {
 			{
 				render(width: number): string[] {
 					const durationMs = clock.durations.get(toolCallId);
-					if (durationMs !== undefined) return []; // done → one-liner owns the row
+					const hasResult = resultsById.has(toolCallId);
+					// Done (executed this session) or restored (result exists from the
+					// restored session): the one-liner in the result region owns the row.
+					if (durationMs !== undefined || hasResult) return [];
 					const startedAt = clock.starts.get(toolCallId);
 					if (startedAt !== undefined) {
 						const summary = [runningSummary, seconds(Date.now() - startedAt)]

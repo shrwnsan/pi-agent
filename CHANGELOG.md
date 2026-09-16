@@ -5,6 +5,11 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.3.13] - 2026-09-16
+
+### Fixed
+- **minimal-mode** — Restored-session tool rows rendered as two lines (built-in-style header + one-liner). Root cause: restored rows have no session-clock data, so the call header fell into its pre-start branch and drew the built-in-style header above the one-liner from the result region. The header now yields whenever a stored result exists — restored done rows collapse to the single `✓ … ▸` line, same as fresh ones.
+
 ## [0.3.12] - 2026-09-16
 
 ### Added
