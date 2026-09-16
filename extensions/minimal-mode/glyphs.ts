@@ -35,9 +35,11 @@ export interface GlyphSet {
 	arrow: string;
 	/** truncation ellipsis */
 	ellipsis: string;
+	/** execution in progress */
+	running: string;
 }
 
-export const GLYPH_KEYS = ["check", "fail", "collapsed", "expanded", "arrow", "ellipsis"] as const;
+export const GLYPH_KEYS = ["check", "fail", "collapsed", "expanded", "arrow", "ellipsis", "running"] as const;
 export type GlyphKey = (typeof GLYPH_KEYS)[number];
 
 export type GlyphTier = "unicode" | "nerd" | "ascii";
@@ -49,6 +51,7 @@ const UNICODE: GlyphSet = {
 	expanded: "▾",
 	arrow: "→",
 	ellipsis: "…",
+	running: "○",
 };
 
 // Font Awesome PUA codepoints — \u escapes keep the source font-proof.
@@ -59,6 +62,7 @@ const NERD: GlyphSet = {
 	expanded: "\uf078",
 	arrow: "→",
 	ellipsis: "…",
+	running: "\uf1ce",
 };
 
 const ASCII: GlyphSet = {
@@ -68,6 +72,7 @@ const ASCII: GlyphSet = {
 	expanded: "v",
 	arrow: "->",
 	ellipsis: "...",
+	running: "o",
 };
 
 export interface MinimalModeConfig {

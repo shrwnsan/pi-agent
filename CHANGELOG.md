@@ -5,6 +5,12 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.3.7] - 2026-09-16
+
+### Added
+- **minimal-mode** — Rows now collapse **while running**, not just after completion: `○ git clone … · 3.2s ▸` with live elapsed time (ticking via partial updates — bash throttles at ~100ms; tools without partial updates may only refresh on completion). Expanding while running shows the built-in streaming preview as before. New `running` glyph (`○` unicode / NF circle-o-notch / `o` ascii), overridable like the rest.
+- **minimal-mode** — Durations now shown for find/grep/ls/read/write/edit collapsed rows too (`✓ edit src/foo.ts · 0.1s ▸`), not just bash.
+
 ## [0.3.6] - 2026-09-16
 
 ### Changed
