@@ -75,8 +75,10 @@ export interface MinimalModeConfig {
 	glyphs?: GlyphTier;
 	/** Per-glyph surgical overrides on top of the resolved tier */
 	overrides?: Partial<GlyphSet>;
-	/** Keep a preview of bash output under the collapsed status line (default: false) */
+	/** Keep a preview of bash output under the collapsed status line. */
 	bashPreview?: boolean;
+	/** Label for hidden thinking blocks (default: "Thinking… ▸"). */
+	thinkingLabel?: string;
 }
 
 const CONFIG_PATH = join(homedir(), ".pi", "agent", "minimal-mode.json");
