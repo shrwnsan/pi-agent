@@ -21,6 +21,12 @@
  * renders as pi ships it. Expand/collapse remains pi's built-in per-tool
  * toggle: Ctrl+O globally, or click a tool block in fullscreen TUI mode.
  *
+ * Contract safety: expanded delegations pass built-ins a clean
+ * `lastComponent: undefined`, so they always rebuild their own components
+ * and our custom row components never leak into the built-ins' reuse chain
+ * (the bold tool-name fallback was exactly that: a TypeError inside the
+ * built-in renderCall, caught by pi, rendered as createCallFallback).
+ *
  * Configuration (~/.pi/agent/minimal-mode.json):
  * {
  *   "glyphs": "unicode",            // "unicode" | "nerd" | "ascii"
@@ -118,6 +124,11 @@ function prune(map: Map<string, number>): void {
  * one for the same tool call. Without this, a double-click toggles the block
  * twice — net zero — which reads as "clicking does nothing".
  */
+/** Built-in renderers mutate lastComponent — always hand them a clean one. */
+function cleanContext(context: any): any {
+	return { ...context, lastComponent: undefined };
+}
+
 const lastToggleAt = new Map<string, number>();
 
 function withClickDebounce(component: Component, toolCallId: string): Component {
@@ -171,10 +182,10 @@ export default function minimalMode(pi: ExtensionAPI) {
 		runningSummary: string,
 	): Component {
 		if (context.expanded) {
-			const component = origCall ? origCall(args, theme, context) : new Text("", 0, 0);
+			const component = origCall ? origCall(args, theme, cleanContext(context)) : new Text("", 0, 0);
 			return withClickDebounce(component, context.toolCallId);
 		}
-		const callComponent = origCall ? origCall(args, theme, context) : new Text("", 0, 0);
+		const callComponent = origCall ? origCall(args, theme, cleanContext(context)) : new Text("", 0, 0);
 		const toolCallId = context.toolCallId;
 		return withClickDebounce(
 			{
@@ -239,7 +250,7 @@ export default function minimalMode(pi: ExtensionAPI) {
 				// Expanded (running or done): built-in rendering, untouched.
 				if (options.expanded) {
 					const component = orig.renderResult
-						? orig.renderResult(result as AgentToolResult<any>, options, theme, context)
+						? orig.renderResult(result as AgentToolResult<any>, options, theme, cleanContext(context))
 						: new Text(textOutput(result), 0, 0);
 					return withClickDebounce(component, context.toolCallId);
 				}
@@ -300,7 +311,7 @@ export default function minimalMode(pi: ExtensionAPI) {
 			renderResult(result, options, theme, context) {
 				if (options.expanded) {
 					const component = orig.renderResult
-						? orig.renderResult(result as AgentToolResult<any>, options, theme, context)
+						? orig.renderResult(result as AgentToolResult<any>, options, theme, cleanContext(context))
 						: new Text(textOutput(result), 0, 0);
 					return withClickDebounce(component, context.toolCallId);
 				}
@@ -357,7 +368,7 @@ export default function minimalMode(pi: ExtensionAPI) {
 			renderResult(result, options, theme, context) {
 				if (options.expanded) {
 					const component = orig.renderResult
-						? orig.renderResult(result as AgentToolResult<any>, options, theme, context)
+						? orig.renderResult(result as AgentToolResult<any>, options, theme, cleanContext(context))
 						: new Text(textOutput(result), 0, 0);
 					return withClickDebounce(component, context.toolCallId);
 				}
