@@ -5,6 +5,12 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.4.0] - 2026-09-16
+
+### Fixed
+- **minimal-mode** — Collapsed rows showed a bold tool-name line (`bash` / `read` / `write` / `edit`) above the one-liner. Root cause: built-in `renderCall` implementations reuse `context.lastComponent` and call methods on it (e.g. `setText`) — but after our custom component was stored there, those calls threw `TypeError`, and pi's `catch` fell back to the bare tool name. Expanded delegations now pass a clean context (`lastComponent: undefined`) so built-ins rebuild their own components; our custom components never leak into `lastComponent` again. The collapsed `✓ one-liner ▸` is now the ONLY line — no label, no header.
+- **minimal-mode** — Bash bashPreview lines and expanded delegations are click-debounced like the one-liners.
+
 ## [0.3.9] - 2026-09-16
 
 ### Fixed
