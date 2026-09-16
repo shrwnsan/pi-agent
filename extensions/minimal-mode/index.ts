@@ -1,17 +1,16 @@
 /**
  * Minimal Mode — compact tool result summaries on top of pi's built-in renderers.
  *
- * v3: true single-line collapsed rows (Amp-style). pi ≥0.78 ships excellent
- * built-in tool renderers (bash preview cards, edit diff previews, syntax
- * highlighting, per-tool click-to-expand). This extension only adds what's
- * still missing:
+ * v4: stateful carets. Collapsed rows show `▸`, expanded rows keep the
+ * summary line with `▾` above the output:
  *
- * - bash: collapsed → ONE dim line  `✓ git status · 0.3s · 4 lines ▸`
- *   (the `$ command` header is suppressed once the result lands; set
- *   "bashPreview": true to also keep ~5 preview lines under it)
- * - find/grep/ls: collapsed → ONE line  `✓ grep /pat/ → 12 matches ▸`
- * - thinking: hidden blocks read  `Thinking… ▸`  (configurable label)
- * - read, write, edit: intentionally untouched — built-ins are superior
+ *   collapsed:  ✓ git status · 0.3s · 4 lines ▸
+ *   expanded:   $ git status -s            ← built-in header (full command)
+ *               ✓ 0.3s · 4 lines ▾         ← summary, caret flipped
+ *               ... full output ...        ← built-in output
+ *
+ * Also: hidden thinking blocks read `Thinking… ▸` (configurable label).
+ * read, write, edit remain untouched — built-ins are superior.
  *
  * Expand/collapse remains pi's built-in per-tool toggle: Ctrl+O globally, or
  * click a tool block in fullscreen TUI mode.
@@ -34,7 +33,7 @@ import type {
 	Theme,
 } from "@earendil-works/pi-coding-agent";
 import { createBashToolDefinition, createFindToolDefinition, createGrepToolDefinition, createLsToolDefinition } from "@earendil-works/pi-coding-agent";
-import { Text, truncateToWidth } from "@earendil-works/pi-tui";
+import { Container, Text, truncateToWidth } from "@earendil-works/pi-tui";
 import { loadConfig, resolveGlyphs, type GlyphSet, type MinimalModeConfig } from "./glyphs.ts";
 
 const PREVIEW_LINES = 5;
@@ -58,7 +57,29 @@ function truncateMiddle(text: string, max: number): string {
 	return `${flat.slice(0, half)}…${flat.slice(-half)}`;
 }
 
-/** Collapsed one-liner: `✓ git status · 0.3s · 4 lines ▸` */
+interface StatParts {
+	glyph: string;
+	text: string;
+}
+
+/** Shared `✓ 0.3s · 4 lines` body (command/query excluded). */
+function statParts(
+	theme: Theme,
+	glyphs: GlyphSet,
+	ok: boolean,
+	durationMs: number | undefined,
+	lines: number,
+	truncated: boolean,
+): StatParts {
+	const glyph = ok ? theme.fg("success", glyphs.check) : theme.fg("error", glyphs.fail);
+	const bits: string[] = [];
+	if (durationMs !== undefined) bits.push(`${(durationMs / 1000).toFixed(1)}s`);
+	if (lines > 0) bits.push(`${lines} line${lines === 1 ? "" : "s"}`);
+	if (truncated) bits.push(glyphs.ellipsis);
+	return { glyph, text: bits.join(" · ") };
+}
+
+/** Collapsed bash one-liner: `✓ git status · 0.3s · 4 lines ▸` */
 function bashOneLiner(
 	command: string,
 	theme: Theme,
@@ -68,15 +89,26 @@ function bashOneLiner(
 	lines: number,
 	truncated: boolean,
 ): string {
-	const glyph = ok ? theme.fg("success", glyphs.check) : theme.fg("error", glyphs.fail);
-	const bits: string[] = [truncateMiddle(command, 48)];
-	if (durationMs !== undefined) bits.push(`${(durationMs / 1000).toFixed(1)}s`);
-	if (lines > 0) bits.push(`${lines} line${lines === 1 ? "" : "s"}`);
-	if (truncated) bits.push(glyphs.ellipsis);
-	return `${glyph} ${theme.fg("muted", bits.join(" · "))} ${theme.fg("muted", glyphs.collapsed)}`;
+	const { glyph, text } = statParts(theme, glyphs, ok, durationMs, lines, truncated);
+	const cmd = theme.fg("muted", truncateMiddle(command, 48));
+	const body = text ? `${cmd} · ${text}` : cmd;
+	return `${glyph} ${body} ${theme.fg("muted", glyphs.collapsed)}`;
 }
 
-/** Collapsed one-liner for find/grep/ls: `✓ grep /pat/ → 12 matches ▸` */
+/** Expanded bash summary: `✓ 0.3s · 4 lines ▾` (command is in the header above) */
+function bashExpandedLine(
+	theme: Theme,
+	glyphs: GlyphSet,
+	ok: boolean,
+	durationMs: number | undefined,
+	lines: number,
+	truncated: boolean,
+): string {
+	const { glyph, text } = statParts(theme, glyphs, ok, durationMs, lines, truncated);
+	return `${glyph} ${theme.fg("muted", text)} ${theme.fg("muted", glyphs.expanded)}`;
+}
+
+/** Collapsed find/grep/ls one-liner: `✓ grep /pat/ → 12 matches ▸` */
 function countOneLiner(
 	summary: string,
 	theme: Theme,
@@ -93,6 +125,21 @@ function countOneLiner(
 	return `${glyph} ${query} ${result} ${theme.fg("muted", glyphs.collapsed)}`;
 }
 
+/** Expanded find/grep/ls summary: `✓ → 12 matches ▾` */
+function countExpandedLine(
+	theme: Theme,
+	glyphs: GlyphSet,
+	ok: boolean,
+	count: number,
+	noun: string,
+): string {
+	const glyph = ok ? theme.fg("success", glyphs.check) : theme.fg("error", glyphs.fail);
+	const result = ok
+		? theme.fg("muted", `${glyphs.arrow} ${count} ${noun}`)
+		: theme.fg("muted", "failed");
+	return `${glyph} ${result} ${theme.fg("muted", glyphs.expanded)}`;
+}
+
 export default function minimalMode(pi: ExtensionAPI) {
 	const config: MinimalModeConfig = loadConfig();
 	const glyphs = resolveGlyphs(config);
@@ -107,7 +154,7 @@ export default function minimalMode(pi: ExtensionAPI) {
 		ctx.ui.setHiddenThinkingLabel(label);
 	});
 
-	// --- bash: single-line collapsed rows -----------------------------------
+	// --- bash: single-line collapsed rows, caret-flipped expanded rows -------
 	{
 		const durations = new Map<string, number>();
 		const orig = createBashToolDefinition(process.cwd());
@@ -126,30 +173,38 @@ export default function minimalMode(pi: ExtensionAPI) {
 				}
 			},
 			renderCall(args, theme, context) {
-				// Once the result has landed, the one-liner in renderResult is the
-				// whole row — drop the `$ command` header.
+				// Once the result has landed, the summary in renderResult is the
+				// whole collapsed row — drop the `$ command` header.
 				if (!context.expanded && durations.has(context.toolCallId)) {
 					return new Text("", 0, 0);
 				}
 				return orig.renderCall ? orig.renderCall(args, theme, context) : new Text("", 0, 0);
 			},
 			renderResult(result, options, theme, context) {
-				if (options.isPartial || options.expanded) {
+				if (options.isPartial) {
 					return orig.renderResult
 						? orig.renderResult(result as AgentToolResult<any>, options, theme, context)
 						: new Text(textOutput(result), 0, 0);
 				}
 				const args = (context as { args?: { command?: string } }).args;
 				const details = result.details as { truncation?: { truncated?: boolean } } | undefined;
-				const one = bashOneLiner(
-					args?.command ?? "",
-					theme,
-					glyphs,
-					context.isError !== true,
-					durations.get(context.toolCallId),
-					countLines(textOutput(result)),
-					details?.truncation?.truncated === true,
-				);
+				const ok = context.isError !== true;
+				const durationMs = durations.get(context.toolCallId);
+				const lines = countLines(textOutput(result));
+				const truncated = details?.truncation?.truncated === true;
+
+				if (options.expanded) {
+					const container = new Container();
+					container.addChild(new Text(bashExpandedLine(theme, glyphs, ok, durationMs, lines, truncated), 0, 0));
+					if (orig.renderResult) {
+						container.addChild(orig.renderResult(result as AgentToolResult<any>, options, theme, context));
+					} else {
+						container.addChild(new Text(textOutput(result), 0, 0));
+					}
+					return container;
+				}
+
+				const one = bashOneLiner(args?.command ?? "", theme, glyphs, ok, durationMs, lines, truncated);
 				if (config.bashPreview) {
 					const preview = textOutput(result)
 						.trimEnd()
@@ -190,11 +245,25 @@ export default function minimalMode(pi: ExtensionAPI) {
 				return orig.renderCall ? orig.renderCall(args, theme, context) : new Text("", 0, 0);
 			},
 			renderResult(result, options, theme, context) {
-				if (options.isPartial || options.expanded) {
+				if (options.isPartial) {
 					return orig.renderResult
 						? orig.renderResult(result as AgentToolResult<any>, options, theme, context)
 						: new Text(textOutput(result), 0, 0);
 				}
+				const ok = context.isError !== true;
+				const count = countLines(textOutput(result));
+
+				if (options.expanded) {
+					const container = new Container();
+					container.addChild(new Text(countExpandedLine(theme, glyphs, ok, count, noun), 0, 0));
+					if (orig.renderResult) {
+						container.addChild(orig.renderResult(result as AgentToolResult<any>, options, theme, context));
+					} else {
+						container.addChild(new Text(textOutput(result), 0, 0));
+					}
+					return container;
+				}
+
 				const args = (context as { args?: Record<string, unknown> }).args ?? {};
 				const argSummary =
 					typeof args.pattern === "string"
@@ -202,15 +271,7 @@ export default function minimalMode(pi: ExtensionAPI) {
 						: typeof args.path === "string"
 							? `${toolName} ${args.path}`
 							: toolName;
-				const one = countOneLiner(
-					argSummary.trim(),
-					theme,
-					glyphs,
-					context.isError !== true,
-					countLines(textOutput(result)),
-					noun,
-				);
-				return new Text(one, 0, 0);
+				return new Text(countOneLiner(argSummary.trim(), theme, glyphs, ok, count, noun), 0, 0);
 			},
 		});
 	}
