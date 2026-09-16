@@ -5,6 +5,11 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.3.9] - 2026-09-16
+
+### Fixed
+- **minimal-mode** — Rapid clicks on a wrapped row (e.g. a habitual double-click) toggled the block twice and cancelled themselves out, reading as "clicking does nothing". Left-clicks within 350ms per tool call are now debounced: the first click toggles, follow-ups inside the window are swallowed.
+
 ## [0.3.8] - 2026-09-16
 
 ### Changed

@@ -13,6 +13,10 @@
  * long commands never wrap into a wall of text. Expanding restores the
  * built-in header and full output — no summary line in between.
  *
+ * Clicks: one left-click anywhere on a wrapped row toggles that block. Rapid
+ * re-clicks (<350ms) are debounced — a double-click no longer toggles twice
+ * and cancels itself out.
+ *
  * Wrapped tools: bash, find, grep, ls, read, write, edit. Everything else
  * renders as pi ships it. Expand/collapse remains pi's built-in per-tool
  * toggle: Ctrl+O globally, or click a tool block in fullscreen TUI mode.
@@ -44,11 +48,12 @@ import {
 	createReadToolDefinition,
 	createWriteToolDefinition,
 } from "@earendil-works/pi-coding-agent";
-import { Text, truncateToWidth, type Component } from "@earendil-works/pi-tui";
+import { Text, truncateToWidth, type Component, type TuiMouseEvent } from "@earendil-works/pi-tui";
 import { loadConfig, resolveGlyphs, type GlyphSet, type MinimalModeConfig } from "./glyphs.ts";
 
 const PREVIEW_LINES = 5;
 const CACHE_MAX = 128;
+const CLICK_DEBOUNCE_MS = 350;
 
 function textOutput(result: AgentToolResult<any>): string {
 	for (const block of result.content) {
@@ -108,6 +113,33 @@ function prune(map: Map<string, number>): void {
 	}
 }
 
+/**
+ * Swallow left-clicks that arrive within CLICK_DEBOUNCE_MS of the previous
+ * one for the same tool call. Without this, a double-click toggles the block
+ * twice — net zero — which reads as "clicking does nothing".
+ */
+const lastToggleAt = new Map<string, number>();
+
+function withClickDebounce(component: Component, toolCallId: string): Component {
+	return {
+		render(width: number) {
+			return component.render(width);
+		},
+		invalidate() {
+			component.invalidate();
+		},
+		handleMouse(event: TuiMouseEvent) {
+			if (event.type === "click" && event.button === "left") {
+				const now = Date.now();
+				const last = lastToggleAt.get(toolCallId) ?? 0;
+				lastToggleAt.set(toolCallId, now);
+				if (now - last < CLICK_DEBOUNCE_MS) return { handled: true };
+			}
+			return undefined; // fall through: pi's MouseRegion toggles normally
+		},
+	};
+}
+
 export default function minimalMode(pi: ExtensionAPI) {
 	const config: MinimalModeConfig = loadConfig();
 	const glyphs = resolveGlyphs(config);
@@ -139,36 +171,40 @@ export default function minimalMode(pi: ExtensionAPI) {
 		runningSummary: string,
 	): Component {
 		if (context.expanded) {
-			return origCall ? origCall(args, theme, context) : new Text("", 0, 0);
+			const component = origCall ? origCall(args, theme, context) : new Text("", 0, 0);
+			return withClickDebounce(component, context.toolCallId);
 		}
 		const callComponent = origCall ? origCall(args, theme, context) : new Text("", 0, 0);
 		const toolCallId = context.toolCallId;
-		return {
-			render(width: number): string[] {
-				const durationMs = clock.durations.get(toolCallId);
-				if (durationMs !== undefined) return []; // done → one-liner owns the row
-				const startedAt = clock.starts.get(toolCallId);
-				if (startedAt !== undefined) {
-					const summary = [runningSummary, seconds(Date.now() - startedAt)]
-						.filter(Boolean)
-						.join(" · ");
-					const line = rowLine(
-						theme,
-						glyphs,
-						glyphs.running,
-						true,
-						summary,
-						glyphs.collapsed,
-						statusColor,
-					);
-					return [truncateToWidth(line, width)];
-				}
-				return callComponent.render(width); // not started → built-in header
+		return withClickDebounce(
+			{
+				render(width: number): string[] {
+					const durationMs = clock.durations.get(toolCallId);
+					if (durationMs !== undefined) return []; // done → one-liner owns the row
+					const startedAt = clock.starts.get(toolCallId);
+					if (startedAt !== undefined) {
+						const summary = [runningSummary, seconds(Date.now() - startedAt)]
+							.filter(Boolean)
+							.join(" · ");
+						const line = rowLine(
+							theme,
+							glyphs,
+							glyphs.running,
+							true,
+							summary,
+							glyphs.collapsed,
+							statusColor,
+						);
+						return [truncateToWidth(line, width)];
+					}
+					return callComponent.render(width); // not started → built-in header
+				},
+				invalidate() {
+					callComponent.invalidate();
+				},
 			},
-			invalidate() {
-				callComponent.invalidate();
-			},
-		};
+			toolCallId,
+		);
 	}
 
 	// --- bash: `○ git clone … · 3.2s ▸` → `✓ git status · 0.3s ▸` ------------
@@ -202,9 +238,10 @@ export default function minimalMode(pi: ExtensionAPI) {
 			renderResult(result, options, theme, context) {
 				// Expanded (running or done): built-in rendering, untouched.
 				if (options.expanded) {
-					return orig.renderResult
+					const component = orig.renderResult
 						? orig.renderResult(result as AgentToolResult<any>, options, theme, context)
 						: new Text(textOutput(result), 0, 0);
+					return withClickDebounce(component, context.toolCallId);
 				}
 				// Collapsed + running: the live header owns the row.
 				if (options.isPartial) return new Text("", 0, 0);
@@ -221,9 +258,9 @@ export default function minimalMode(pi: ExtensionAPI) {
 						.split("\n")
 						.slice(0, PREVIEW_LINES)
 						.map((line) => theme.fg("toolOutput", line));
-					return new Text([one, ...preview].join("\n"), 0, 0);
+					return withClickDebounce(new Text([one, ...preview].join("\n"), 0, 0), context.toolCallId);
 				}
-				return new Text(one, 0, 0);
+				return withClickDebounce(new Text(one, 0, 0), context.toolCallId);
 			},
 		});
 	}
@@ -262,9 +299,10 @@ export default function minimalMode(pi: ExtensionAPI) {
 			},
 			renderResult(result, options, theme, context) {
 				if (options.expanded) {
-					return orig.renderResult
+					const component = orig.renderResult
 						? orig.renderResult(result as AgentToolResult<any>, options, theme, context)
 						: new Text(textOutput(result), 0, 0);
+					return withClickDebounce(component, context.toolCallId);
 				}
 				if (options.isPartial) return new Text("", 0, 0);
 
@@ -280,7 +318,10 @@ export default function minimalMode(pi: ExtensionAPI) {
 				const duration = clock.durations.get(context.toolCallId);
 				const durationText = duration !== undefined ? seconds(duration) : "";
 				const summary = [query, durationText, countPart].filter(Boolean).join(" · ");
-				return new Text(rowLine(theme, glyphs, glyphs.check, context.isError !== true, summary, glyphs.collapsed, statusColor), 0, 0);
+				return withClickDebounce(
+					new Text(rowLine(theme, glyphs, glyphs.check, context.isError !== true, summary, glyphs.collapsed, statusColor), 0, 0),
+					context.toolCallId,
+				);
 			},
 		});
 	}
@@ -315,18 +356,22 @@ export default function minimalMode(pi: ExtensionAPI) {
 			},
 			renderResult(result, options, theme, context) {
 				if (options.expanded) {
-					return orig.renderResult
+					const component = orig.renderResult
 						? orig.renderResult(result as AgentToolResult<any>, options, theme, context)
 						: new Text(textOutput(result), 0, 0);
+					return withClickDebounce(component, context.toolCallId);
 				}
 				if (options.isPartial) return new Text("", 0, 0);
 
 				const a = (context as { args?: Record<string, unknown> }).args ?? {};
 				const path = typeof a.path === "string" ? truncateMiddle(tildePath(a.path), 40) : "";
-				const summary = [`${toolName} ${path}`.trim(), clock.durations.get(context.toolCallId) !== undefined ? seconds(clock.durations.get(context.toolCallId) as number) : ""]
-					.filter(Boolean)
-					.join(" · ");
-				return new Text(rowLine(theme, glyphs, glyphs.check, context.isError !== true, summary, glyphs.collapsed, statusColor), 0, 0);
+				const durationMs = clock.durations.get(context.toolCallId);
+				const duration = durationMs !== undefined ? seconds(durationMs) : "";
+				const summary = [`${toolName} ${path}`.trim(), duration].filter(Boolean).join(" · ");
+				return withClickDebounce(
+					new Text(rowLine(theme, glyphs, glyphs.check, context.isError !== true, summary, glyphs.collapsed, statusColor), 0, 0),
+					context.toolCallId,
+				);
 			},
 		});
 	}
