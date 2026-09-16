@@ -31,6 +31,7 @@ pi-agent/
 |-----------|-------------|
 | `tilde-path` | Rewrites CWD in system prompt to use `~` notation |
 | `minimal-mode` | Adds collapsed status summaries (`✓ 1.2s · 132 lines ▸`, `✓ → 12 matches ▸`) on top of pi's built-in collapsible tool renderers. Configurable glyph tiers (unicode/nerd/ascii) via `~/.pi/agent/minimal-mode.json` |
+| `footer-path` | Minimal footer: `machine · repo · branch` — container/SSH-aware, worktree-aware. Toggle with `/footer-path` |
 | `tps` | Notifies tokens/sec and usage stats after each agent run. Toggle with `/tps` |
 | `answer` | Extracts questions from last assistant message and answers them interactively via `/answer` |
 | `pi-oauth-qwen` | ~~OAuth provider for Qwen models via device code flow with PKCE~~ **Suspended** — [Qwen's free OAuth tier ended April 15, 2026](https://github.com/QwenLM/qwen-code). Code preserved for potential future reactivation. |
