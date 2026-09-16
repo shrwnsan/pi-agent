@@ -4,14 +4,16 @@ Compact tool result summaries on top of pi's built-in renderers.
 
 ```
 Collapsed:                          Expanded (Ctrl+O or click):
-  ✓ git status · 0.3s · 4 lines ▸     $ git status
-  ✓ grep /pat/ → 12 matches ▸           ... full output ...
-  Thinking… ▸
+  ✓ git status · 0.3s · 4 lines ▸     $ git status -s        ← full command header
+                                      ✓ 0.3s · 4 lines ▾     ← caret flips
+  ✓ grep /pat/ → 12 matches ▸         → 12 matches
+  Thinking… ▸                         ... full output ...
 ```
 
 Collapsed rows are a **single dim line** — glyph, command/query summary,
 duration/count, collapse caret. The `$ command` header is suppressed once
-the result lands, so long commands never wrap into a wall of text.
+the result lands, so long commands never wrap into a wall of text. Expanded
+rows keep the summary with the caret flipped to `▾`, above the full output.
 
 ## Philosophy (v2)
 
