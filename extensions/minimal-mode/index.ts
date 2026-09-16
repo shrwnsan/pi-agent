@@ -13,15 +13,9 @@
  * long commands never wrap into a wall of text. Expanding restores the
  * built-in header and full output — no summary line in between.
  *
- * CONTRACT NOTE: built-in renderCall implementations reuse
- * `context.lastComponent` and call methods on it (e.g. setText). Custom
- * components returned from renderCall MUST therefore never leak into
- * lastComponent — expanded delegations pass `{...context, lastComponent:
- * undefined}` so built-ins rebuild their own components cleanly.
- *
- * Clicks: one left-click anywhere on a wrapped row toggles that block.
- * Rapid re-clicks (<350ms) are debounced — a double-click no longer toggles
- * twice and cancels itself out.
+ * Clicks: one left-click anywhere on a wrapped row toggles that block. Rapid
+ * re-clicks (<350ms) are debounced — a double-click no longer toggles twice
+ * and cancels itself out.
  *
  * Wrapped tools: bash, find, grep, ls, read, write, edit. Everything else
  * renders as pi ships it. Expand/collapse remains pi's built-in per-tool
@@ -146,11 +140,6 @@ function withClickDebounce(component: Component, toolCallId: string): Component 
 	};
 }
 
-/** Built-in renderers mutate lastComponent — always hand them a clean one. */
-function cleanContext(context: any): any {
-	return { ...context, lastComponent: undefined };
-}
-
 export default function minimalMode(pi: ExtensionAPI) {
 	const config: MinimalModeConfig = loadConfig();
 	const glyphs = resolveGlyphs(config);
@@ -167,12 +156,13 @@ export default function minimalMode(pi: ExtensionAPI) {
 	});
 
 	/**
-	 * Collapsed call header, drawn at render time:
-	 *   done    → nothing (the result one-liner owns the row)
-	 *   running → `○ summary · elapsed ▸`
-	 *   else    → the built-in header (fresh component — never poisoned)
+	 * Live call header: collapsed, it disappears once execution starts (the
+	 * running/done one-liner in the result region owns the row). Expanded,
+	 * it stays as the built-in full-command header. pi caches the returned
+	 * component (lastComponent pattern) and does not re-invoke renderCall on
+	 * state changes — hence the draw-time checks in render().
 	 */
-	function collapsedCallHeader(
+	function liveCallHeader(
 		origCall: ((args: any, theme: Theme, context: any) => any) | undefined,
 		args: any,
 		theme: Theme,
@@ -180,14 +170,17 @@ export default function minimalMode(pi: ExtensionAPI) {
 		clock: ToolClock,
 		runningSummary: string,
 	): Component {
-		const headerComponent = origCall
-			? origCall(args, theme, cleanContext(context))
-			: new Text("", 0, 0);
+		if (context.expanded) {
+			const component = origCall ? origCall(args, theme, context) : new Text("", 0, 0);
+			return withClickDebounce(component, context.toolCallId);
+		}
+		const callComponent = origCall ? origCall(args, theme, context) : new Text("", 0, 0);
 		const toolCallId = context.toolCallId;
 		return withClickDebounce(
 			{
 				render(width: number): string[] {
-					if (clock.durations.has(toolCallId)) return [];
+					const durationMs = clock.durations.get(toolCallId);
+					if (durationMs !== undefined) return []; // done → one-liner owns the row
 					const startedAt = clock.starts.get(toolCallId);
 					if (startedAt !== undefined) {
 						const summary = [runningSummary, seconds(Date.now() - startedAt)]
@@ -204,10 +197,10 @@ export default function minimalMode(pi: ExtensionAPI) {
 						);
 						return [truncateToWidth(line, width)];
 					}
-					return headerComponent.render(width);
+					return callComponent.render(width); // not started → built-in header
 				},
 				invalidate() {
-					headerComponent.invalidate();
+					callComponent.invalidate();
 				},
 			},
 			toolCallId,
@@ -233,13 +226,7 @@ export default function minimalMode(pi: ExtensionAPI) {
 				}
 			},
 			renderCall(args, theme, context) {
-				if (context.expanded) {
-					const component = orig.renderCall
-						? orig.renderCall(args, theme, cleanContext(context))
-						: new Text("", 0, 0);
-					return withClickDebounce(component, context.toolCallId);
-				}
-				return collapsedCallHeader(
+				return liveCallHeader(
 					orig.renderCall?.bind(orig),
 					args,
 					theme,
@@ -249,12 +236,14 @@ export default function minimalMode(pi: ExtensionAPI) {
 				);
 			},
 			renderResult(result, options, theme, context) {
+				// Expanded (running or done): built-in rendering, untouched.
 				if (options.expanded) {
 					const component = orig.renderResult
-						? orig.renderResult(result as AgentToolResult<any>, options, theme, cleanContext(context))
+						? orig.renderResult(result as AgentToolResult<any>, options, theme, context)
 						: new Text(textOutput(result), 0, 0);
 					return withClickDebounce(component, context.toolCallId);
 				}
+				// Collapsed + running: the live header owns the row.
 				if (options.isPartial) return new Text("", 0, 0);
 
 				const args = (context as { args?: { command?: string } }).args;
@@ -299,12 +288,6 @@ export default function minimalMode(pi: ExtensionAPI) {
 				}
 			},
 			renderCall(args, theme, context) {
-				if (context.expanded) {
-					const component = orig.renderCall
-						? orig.renderCall(args, theme, cleanContext(context))
-						: new Text("", 0, 0);
-					return withClickDebounce(component, context.toolCallId);
-				}
 				const a = (args ?? {}) as Record<string, unknown>;
 				const summary =
 					typeof a.pattern === "string"
@@ -312,12 +295,12 @@ export default function minimalMode(pi: ExtensionAPI) {
 						: typeof a.path === "string"
 							? `${toolName} ${truncateMiddle(tildePath(a.path), 32)}`
 							: toolName;
-				return collapsedCallHeader(orig.renderCall?.bind(orig), args, theme, context, clock, summary);
+				return liveCallHeader(orig.renderCall?.bind(orig), args, theme, context, clock, summary);
 			},
 			renderResult(result, options, theme, context) {
 				if (options.expanded) {
 					const component = orig.renderResult
-						? orig.renderResult(result as AgentToolResult<any>, options, theme, cleanContext(context))
+						? orig.renderResult(result as AgentToolResult<any>, options, theme, context)
 						: new Text(textOutput(result), 0, 0);
 					return withClickDebounce(component, context.toolCallId);
 				}
@@ -366,21 +349,15 @@ export default function minimalMode(pi: ExtensionAPI) {
 				}
 			},
 			renderCall(args, theme, context) {
-				if (context.expanded) {
-					const component = orig.renderCall
-						? orig.renderCall(args, theme, cleanContext(context))
-						: new Text("", 0, 0);
-					return withClickDebounce(component, context.toolCallId);
-				}
 				const a = (args ?? {}) as Record<string, unknown>;
 				const summary =
 					typeof a.path === "string" ? `${toolName} ${truncateMiddle(tildePath(a.path), 40)}` : toolName;
-				return collapsedCallHeader(orig.renderCall?.bind(orig), args, theme, context, clock, summary);
+				return liveCallHeader(orig.renderCall?.bind(orig), args, theme, context, clock, summary);
 			},
 			renderResult(result, options, theme, context) {
 				if (options.expanded) {
 					const component = orig.renderResult
-						? orig.renderResult(result as AgentToolResult<any>, options, theme, cleanContext(context))
+						? orig.renderResult(result as AgentToolResult<any>, options, theme, context)
 						: new Text(textOutput(result), 0, 0);
 					return withClickDebounce(component, context.toolCallId);
 				}

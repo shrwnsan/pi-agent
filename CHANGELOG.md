@@ -5,6 +5,11 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.3.10] - 2026-09-16
+
+### Reverted
+- **minimal-mode** — Reverted v0.4.0 (`lastComponent` isolation rewrite): it regressed to rendering full raw output for every wrapped tool (as if Ctrl+O were stuck). Rolled back to the v0.3.9 behavior — right UX, with the known cosmetic tool-name fallback line. The `lastComponent` fix will return once it passes an offline render harness.
+
 ## [0.4.0] - 2026-09-16
 
 ### Fixed
