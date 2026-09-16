@@ -5,6 +5,12 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.3.2] - 2026-09-16
+
+### Fixed
+- **footer-path** — `setFooter()` replaces the *entire* built-in footer, which silently dropped pi's token/context/model stats line. The footer now renders two lines: the compact `[machine] repo · branch` path plus a faithful replica of the stats line (↑in ↓out R/W cache tokens, CH cache-hit %, $cost, context %/window with warning/error coloring, right-aligned `(provider) model • thinking`), rebuilt from the documented extension data path (`ctx.getContextUsage()`, `ctx.sessionManager.getEntries()`, `ctx.model`, `ctx.thinkingLevel`). Extension `setStatus` items still render on a third line.
+- **footer-path** — Session name (when set) now shows on line 1, matching built-in behavior.
+
 ## [0.3.1] - 2026-09-16
 
 ### Added
