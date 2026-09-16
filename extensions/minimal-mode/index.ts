@@ -156,6 +156,11 @@ export default function minimalMode(pi: ExtensionAPI) {
 	const glyphs = resolveGlyphs(config);
 	const statusColor = config.statusColor === true;
 
+	// Tool calls that have a final result — fresh (executed this session) or
+	// restored from the session file. Restored rows have no clock data, so the
+	// collapsed live header needs this to yield the row to the result one-liner.
+	const resultsById = new Set<string>();
+
 	// --- temporary debug instrumentation ---
 	const debug = { calls: new Map<string, number>(), lastError: new Map<string, string>() };
 	function debugCall(label: string): void {
@@ -225,28 +230,34 @@ export default function minimalMode(pi: ExtensionAPI) {
 		return withClickDebounce(
 			{
 				render(width: number): string[] {
-					const durationMs = clock.durations.get(toolCallId);
-					const hasResult = resultsById.has(toolCallId);
-					// Done (executed this session) or restored (result exists from the
-					// restored session): the one-liner in the result region owns the row.
-					if (durationMs !== undefined || hasResult) return [];
-					const startedAt = clock.starts.get(toolCallId);
-					if (startedAt !== undefined) {
-						const summary = [runningSummary, seconds(Date.now() - startedAt)]
-							.filter(Boolean)
-							.join(" · ");
-						const line = rowLine(
-							theme,
-							glyphs,
-							glyphs.running,
-							true,
-							summary,
-							glyphs.collapsed,
-							statusColor,
-						);
-						return [truncateToWidth(line, width)];
+					try {
+						const durationMs = clock.durations.get(toolCallId);
+						const hasResult = resultsById.has(toolCallId);
+						// Done (executed this session) or restored (result exists from the
+						// restored session): the one-liner in the result region owns the row.
+						if (durationMs !== undefined || hasResult) return [];
+						const startedAt = clock.starts.get(toolCallId);
+						if (startedAt !== undefined) {
+							const summary = [runningSummary, seconds(Date.now() - startedAt)]
+								.filter(Boolean)
+								.join(" · ");
+							const line = rowLine(
+								theme,
+								glyphs,
+								glyphs.running,
+								true,
+								summary,
+								glyphs.collapsed,
+								statusColor,
+							);
+							return [truncateToWidth(line, width)];
+						}
+						return callComponent.render(width); // not started → built-in header
+					} catch (err) {
+						// Never let a header-render bug take down the whole TUI.
+						debugError(`${toolName}:live-header`, err);
+						return callComponent.render(width);
 					}
-					return callComponent.render(width); // not started → built-in header
 				},
 				invalidate() {
 					callComponent.invalidate();
@@ -289,6 +300,7 @@ export default function minimalMode(pi: ExtensionAPI) {
 			},
 			renderResult(result, options, theme, context) {
 				debugCall(`${toolName}:renderResult${options.expanded ? "+x" : options.isPartial ? "+p" : ""}`);
+				if (!options.isPartial) resultsById.add(context.toolCallId);
 				// Expanded (running or done): built-in rendering, untouched.
 				if (options.expanded) {
 					const component = instrument(`${toolName}:result-expanded`, () =>
@@ -355,6 +367,7 @@ export default function minimalMode(pi: ExtensionAPI) {
 			},
 			renderResult(result, options, theme, context) {
 				debugCall(`${toolName}:renderResult${options.expanded ? "+x" : options.isPartial ? "+p" : ""}`);
+				if (!options.isPartial) resultsById.add(context.toolCallId);
 				if (options.expanded) {
 					const component = instrument(`${toolName}:result-expanded`, () =>
 						orig.renderResult
@@ -416,6 +429,7 @@ export default function minimalMode(pi: ExtensionAPI) {
 			},
 			renderResult(result, options, theme, context) {
 				debugCall(`${toolName}:renderResult${options.expanded ? "+x" : options.isPartial ? "+p" : ""}`);
+				if (!options.isPartial) resultsById.add(context.toolCallId);
 				if (options.expanded) {
 					const component = instrument(`${toolName}:result-expanded`, () =>
 						orig.renderResult

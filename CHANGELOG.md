@@ -5,6 +5,11 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.3.14] - 2026-09-16
+
+### Fixed
+- **minimal-mode** — Crash on session resume: `ReferenceError: resultsById is not defined` in the collapsed live-header render took down the whole TUI (uncaughtException). v0.3.13 added the `resultsById.has(...)` consumer but never declared the set nor populated it. The set is now declared per extension instance and populated in every `renderResult` for final (non-partial) results — which covers restored-session rows, since pi replays the same render hooks on restore. The live-header render is also wrapped defensively: any future error falls back to the built-in header and is recorded via `/minimal-debug` instead of crashing pi.
+
 ## [0.3.13] - 2026-09-16
 
 ### Fixed
