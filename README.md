@@ -20,9 +20,9 @@ Or add to `~/.pi/agent/settings.json`:
 pi-agent/
 ├── package.json
 ├── extensions/          # Custom extensions
-├── themes/              # TUI themes (.json)
-├── skills/              # Agent skills (SKILL.md)
-└── prompts/             # Custom system prompt additions (.md)
+├── themes/              # TUI themes (.json)  (planned)
+├── skills/              # Agent skills (SKILL.md)  (planned)
+└── prompts/             # Custom system prompt additions (.md)  (planned)
 ```
 
 ## Extensions
@@ -43,6 +43,7 @@ Additional directories to add as needed:
 - **`themes/`** — Custom TUI themes. Each theme is a `.json` file. [Themes docs](https://github.com/badlogic/pi-mono/blob/main/packages/coding-agent/docs/themes.md)
 
 - **`skills/`** — Custom agent skills. Each skill is a directory with a `SKILL.md` file, or a top-level `.md` file. [Skills docs](https://github.com/badlogic/pi-mono/blob/main/packages/coding-agent/docs/skills.md)
+  For now, the skills catalogue lives in [shrwnsan/agents](https://github.com/shrwnsan/agents) → `skills/` — tool-agnostic, shared across agent harnesses. That repo has no pi package manifest yet, so copy individual skills into `~/.pi/agent/skills/`; pi-specific skills may land here later.
 
 - **`prompts/`** — Custom prompt templates (`.md` files). These become available as `/template` commands in pi. [Prompt templates docs](https://github.com/badlogic/pi-mono/blob/main/packages/coding-agent/docs/prompt-templates.md)
 
