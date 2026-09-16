@@ -5,6 +5,11 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.3.8] - 2026-09-16
+
+### Changed
+- **minimal-mode** — Expanded rows simplified to pi's built-in rendering only (full command header + complete output). The `▾` summary line between header and output is gone — expand/collapse now reads as two clean states: one-liner ↔ built-in view. Collapse affordances remain the one-liner caret, built-in hints, and click/Ctrl+O.
+
 ## [0.3.7] - 2026-09-16
 
 ### Added
