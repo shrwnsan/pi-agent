@@ -100,3 +100,10 @@ NERD_FONT=1                    # shorthand for PI_GLYPHS=nerd
 
 Expand/collapse is pi's built-in per-tool toggle: **Ctrl+O** globally, or
 **click a tool block** in fullscreen TUI mode (`"tuiMode": "fullscreen"`).
+
+## Theme pairing
+
+The package ships a **`minimal-dark`** theme (`themes/`): built-in dark with
+uniform tool box backgrounds — expanded blocks match the muted one-liners,
+state lives in the `○ ✓ ✗` glyphs, not the box color. Select via `/settings`
+after installing the package.
