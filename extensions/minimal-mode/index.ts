@@ -6,13 +6,12 @@
  *   running:    ○ git clone … · 3.2s ▸     (elapsed ticks via partial updates)
  *   collapsed:  ✓ git status · 0.3s ▸
  *   failed:     ✗ npm test · 3.1s ▸
- *   expanded:   $ git status -s              ← built-in header (full command)
- *               ✓ 0.3s ▾                     ← caret flipped
- *               ... full output ...
+ *   expanded:   $ git status -s            ← built-in header (full command)
+ *               ... full output ...        ← built-in output, nothing else
  *
  * The `$ command` header is suppressed from the moment execution starts, so
- * long commands never wrap into a wall of text. Expanding while running
- * shows the built-in streaming preview — nothing is lost, just folded.
+ * long commands never wrap into a wall of text. Expanding restores the
+ * built-in header and full output — no summary line in between.
  *
  * Wrapped tools: bash, find, grep, ls, read, write, edit. Everything else
  * renders as pi ships it. Expand/collapse remains pi's built-in per-tool
@@ -45,7 +44,7 @@ import {
 	createReadToolDefinition,
 	createWriteToolDefinition,
 } from "@earendil-works/pi-coding-agent";
-import { Container, Text, truncateToWidth, type Component } from "@earendil-works/pi-tui";
+import { Text, truncateToWidth, type Component } from "@earendil-works/pi-tui";
 import { loadConfig, resolveGlyphs, type GlyphSet, type MinimalModeConfig } from "./glyphs.ts";
 
 const PREVIEW_LINES = 5;
@@ -69,7 +68,7 @@ function seconds(ms: number): string {
 	return `${(ms / 1000).toFixed(1)}s`;
 }
 
-/** Uniform row line: glyph + summary + caret, single color by default. */
+/** Uniform collapsed row: glyph + summary + caret, single color by default. */
 function rowLine(
 	theme: Theme,
 	glyphs: GlyphSet,
@@ -201,37 +200,21 @@ export default function minimalMode(pi: ExtensionAPI) {
 				);
 			},
 			renderResult(result, options, theme, context) {
-				const ok = context.isError !== true;
-				const durationMs = clock.durations.get(context.toolCallId);
-				const duration = durationMs !== undefined ? seconds(durationMs) : "";
-				const command = truncateMiddle(
-					(context as { args?: { command?: string } }).args?.command ?? "",
-					48,
-				);
-
-				if (options.isPartial) {
-					// Running: the live header already draws the one-liner.
-					if (!options.expanded) return new Text("", 0, 0);
+				// Expanded (running or done): built-in rendering, untouched.
+				if (options.expanded) {
 					return orig.renderResult
 						? orig.renderResult(result as AgentToolResult<any>, options, theme, context)
 						: new Text(textOutput(result), 0, 0);
 				}
+				// Collapsed + running: the live header owns the row.
+				if (options.isPartial) return new Text("", 0, 0);
 
-				if (options.expanded) {
-					const container = new Container();
-					container.addChild(
-						new Text(rowLine(theme, glyphs, glyphs.check, ok, duration, glyphs.expanded, statusColor), 0, 0),
-					);
-					if (orig.renderResult) {
-						container.addChild(orig.renderResult(result as AgentToolResult<any>, options, theme, context));
-					} else {
-						container.addChild(new Text(textOutput(result), 0, 0));
-					}
-					return container;
-				}
-
+				const args = (context as { args?: { command?: string } }).args;
+				const durationMs = clock.durations.get(context.toolCallId);
+				const duration = durationMs !== undefined ? seconds(durationMs) : "";
+				const command = truncateMiddle(args?.command ?? "", 48);
 				const summary = [command, duration].filter(Boolean).join(" · ");
-				const one = rowLine(theme, glyphs, glyphs.check, ok, summary, glyphs.collapsed, statusColor);
+				const one = rowLine(theme, glyphs, glyphs.check, context.isError !== true, summary, glyphs.collapsed, statusColor);
 				if (config.bashPreview) {
 					const preview = textOutput(result)
 						.trimEnd()
@@ -275,16 +258,16 @@ export default function minimalMode(pi: ExtensionAPI) {
 						: typeof a.path === "string"
 							? `${toolName} ${truncateMiddle(tildePath(a.path), 32)}`
 							: toolName;
-				return liveCallHeader(
-					orig.renderCall?.bind(orig),
-					args,
-					theme,
-					context,
-					clock,
-					summary,
-				);
+				return liveCallHeader(orig.renderCall?.bind(orig), args, theme, context, clock, summary);
 			},
 			renderResult(result, options, theme, context) {
+				if (options.expanded) {
+					return orig.renderResult
+						? orig.renderResult(result as AgentToolResult<any>, options, theme, context)
+						: new Text(textOutput(result), 0, 0);
+				}
+				if (options.isPartial) return new Text("", 0, 0);
+
 				const a = (context as { args?: Record<string, unknown> }).args ?? {};
 				const query =
 					typeof a.pattern === "string"
@@ -292,35 +275,12 @@ export default function minimalMode(pi: ExtensionAPI) {
 						: typeof a.path === "string"
 							? `${toolName} ${truncateMiddle(tildePath(a.path), 32)}`
 							: toolName;
-				const ok = context.isError !== true;
-				const durationMs = clock.durations.get(context.toolCallId);
-				const duration = durationMs !== undefined ? seconds(durationMs) : "";
-
-				if (options.isPartial) {
-					if (!options.expanded) return new Text("", 0, 0);
-					return orig.renderResult
-						? orig.renderResult(result as AgentToolResult<any>, options, theme, context)
-						: new Text(textOutput(result), 0, 0);
-				}
-
 				const countNum = textOutput(result).trimEnd().split("\n").filter(Boolean).length;
-				const countPart = ok ? `${glyphs.arrow} ${countNum} ${noun}` : "failed";
-
-				if (options.expanded) {
-					const container = new Container();
-					container.addChild(
-						new Text(rowLine(theme, glyphs, glyphs.check, ok, countPart, glyphs.expanded, statusColor), 0, 0),
-					);
-					if (orig.renderResult) {
-						container.addChild(orig.renderResult(result as AgentToolResult<any>, options, theme, context));
-					} else {
-						container.addChild(new Text(textOutput(result), 0, 0));
-					}
-					return container;
-				}
-
-				const summary = [query, duration, countPart].filter(Boolean).join(" · ");
-				return new Text(rowLine(theme, glyphs, glyphs.check, ok, summary, glyphs.collapsed, statusColor), 0, 0);
+				const countPart = context.isError !== true ? `${glyphs.arrow} ${countNum} ${noun}` : "failed";
+				const duration = clock.durations.get(context.toolCallId);
+				const durationText = duration !== undefined ? seconds(duration) : "";
+				const summary = [query, durationText, countPart].filter(Boolean).join(" · ");
+				return new Text(rowLine(theme, glyphs, glyphs.check, context.isError !== true, summary, glyphs.collapsed, statusColor), 0, 0);
 			},
 		});
 	}
@@ -354,36 +314,19 @@ export default function minimalMode(pi: ExtensionAPI) {
 				return liveCallHeader(orig.renderCall?.bind(orig), args, theme, context, clock, summary);
 			},
 			renderResult(result, options, theme, context) {
-				const a = (context as { args?: Record<string, unknown> }).args ?? {};
-				const path = typeof a.path === "string" ? truncateMiddle(tildePath(a.path), 40) : "";
-				const ok = context.isError !== true;
-				const durationMs = clock.durations.get(context.toolCallId);
-				const duration = durationMs !== undefined ? seconds(durationMs) : "";
-
-				if (options.isPartial) {
-					if (!options.expanded) return new Text("", 0, 0);
+				if (options.expanded) {
 					return orig.renderResult
 						? orig.renderResult(result as AgentToolResult<any>, options, theme, context)
 						: new Text(textOutput(result), 0, 0);
 				}
+				if (options.isPartial) return new Text("", 0, 0);
 
-				const summary = `${toolName} ${path}`.trim();
-
-				if (options.expanded) {
-					const container = new Container();
-					container.addChild(
-						new Text(rowLine(theme, glyphs, glyphs.check, ok, summary, glyphs.expanded, statusColor), 0, 0),
-					);
-					if (orig.renderResult) {
-						container.addChild(orig.renderResult(result as AgentToolResult<any>, options, theme, context));
-					} else {
-						container.addChild(new Text(textOutput(result), 0, 0));
-					}
-					return container;
-				}
-
-				const collapsed = [summary, duration].filter(Boolean).join(" · ");
-				return new Text(rowLine(theme, glyphs, glyphs.check, ok, collapsed, glyphs.collapsed, statusColor), 0, 0);
+				const a = (context as { args?: Record<string, unknown> }).args ?? {};
+				const path = typeof a.path === "string" ? truncateMiddle(tildePath(a.path), 40) : "";
+				const summary = [`${toolName} ${path}`.trim(), clock.durations.get(context.toolCallId) !== undefined ? seconds(clock.durations.get(context.toolCallId) as number) : ""]
+					.filter(Boolean)
+					.join(" · ");
+				return new Text(rowLine(theme, glyphs, glyphs.check, context.isError !== true, summary, glyphs.collapsed, statusColor), 0, 0);
 			},
 		});
 	}

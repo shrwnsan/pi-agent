@@ -6,9 +6,9 @@ single-color rows — one line per tool call.
 ```
 Running:                            Collapsed:                          Expanded (Ctrl+O or click):
   ○ git clone … · 3.2s ▸              ✓ git status · 0.3s ▸               $ git status -s
-                                      ✓ grep /pat/ → 12 matches ▸         ✓ 0.3s ▾
-                                      ✓ edit src/foo.ts ▸                 → 12 matches
-                                      Thinking… ▸                         ... full output ...
+                                      ✓ grep /pat/ → 12 matches ▸         ... full output ...
+                                      ✓ edit src/foo.ts ▸
+                                      Thinking… ▸
 ```
 
 Rows collapse the moment execution starts — the `○` running line shows a
@@ -19,7 +19,8 @@ watch the built-in streaming preview; nothing is lost, just folded.
 Collapsed rows are a **single muted line** — glyph, command/query summary,
 duration, collapse caret. The `$ command` header is suppressed once the
 result lands, so long commands never wrap into a wall of text. Expanded
-rows keep the summary with the caret flipped to `▾`, above the full output.
+rows are the built-in rendering, untouched: full command header + complete
+output — no summary line in between.
 
 ## Philosophy (v2)
 
