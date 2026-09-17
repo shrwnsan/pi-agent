@@ -151,9 +151,89 @@ pi.dev lists scoped names fine, e.g. `@estebanforge/pi-glm-tweaks`).
 
 ## 7. Recommended actions
 
-1. `pi install npm:pi-btw` — use, don't port.
-2. Skip glm-tweaks + ampi. Optionally port `lib/zai-search.ts` as a small
-   `zai-search` extension here if Coding-Plan web search is wanted.
-3. Before building pi-fleet/foreman: trial `pi-subagents`. Build only if grouped
-   fan-out + worktree isolation + evidence-bounded reviews (§5.2/4/5) remain gaps
-   worth a ~1k-line zero-dep extension.
+1. `pi install npm:pi-subagents` — supersedes any homegrown fleet (see §8).
+2. `pi install npm:pi-btw` — audit the `/btw:inject` merge path before trusting it
+   with live sessions (§8.4).
+3. Skip glm-tweaks + ampi. Port `lib/zai-search.ts` as a small `zai-search`
+   extension here — it satisfies pi-subagents' `pi-web-access` prerequisite for
+   `researcher`/`evidence-auditor` children while billing the Coding Plan quota
+   (§8.4).
+
+## 8. Follow-up deep dive: pi-subagents (2026-09-17)
+
+Deep dive of the 101k-line / 334-file package, run against the §5 pi-fleet sketch,
+with a 3-round adversarial review by a Gilfoyle-persona subagent (live `pi -p`
+child). Line counts from `src/runs/`:
+
+### 8.1 Our pi-fleet "valuable IP" list vs reality — every item exists, deeper
+
+| pi-fleet item (§5) | pi-subagents reality |
+| --- | --- |
+| In-process primary + child fallback runner | `src/runs/foreground/` (11.3k lines) + `src/runs/background/` (22.9k lines, detached SDK runner with revival leases, async resume, completion batching/dedupe) |
+| `background/group:` fan-out, one card/one settle | `background/parallel-groups.ts` + `fleet-view.ts` + `completion-batcher.ts` |
+| TUI fleet board | `fleet-view.ts` |
+| Worktree isolation (henryqw pattern) | `shared/worktree.ts` (1,516) + `worktree-cleanup-plan.ts` (869) + setup commands — `worktreeProvider: auto\|native\|worktrunk`, fail-closed placement rejection, diff evidence on handoff. ~2,600 lines we would have written worse |
+| Evidence-bounded reports | `shared/mutation-evidence.ts`, per-child worktree review + parent aggregate-diff review (watchdog docs) |
+| Loader hardening | Frontmatter schema with `systemPromptMode: replace\|append`, `defaultContext: fork`, `inheritProjectContext`, `aliases`, strict tool allowlists that never inherit ambient extension tools |
+
+### 8.2 IP beyond our list (what we hadn't conceived)
+
+- **`contact_supervisor`** — live bidirectional parent↔child channel; a blocked
+  worker asks for a decision mid-run instead of guessing or dying.
+- **Watchdog** — opt-in second model reviewing every `agent_end` boundary
+  (coalesced diffs, LSP pre-pass before any model call, cadence reviews, child
+  overrides).
+- **Missions** — durable run records with receipts (PR/CI/deploy links), 256 KiB
+  state KV, *goal missions* (token-budgeted continuation drivers).
+- **Cold-start packet doctrine** — every child packet must stand alone (goal,
+  repo/ref, authority boundary, success criteria, stop/escalation rules); no
+  parent-history reliance.
+- **External-CLI adapters** — claude-code / codex-exec / cursor-agent as subagents
+  via `runner: external-cli` frontmatter; other harnesses become fleet members.
+- **`workflowScript` sandbox** — JS orchestration (`runs.run` / `runs.all` /
+  `runs.lanes`) with authority ceilings and named resources; `schedule.create`
+  for cron-launched work; council mode for bounded multi-advisor deliberation.
+
+### 8.3 Gilfoyle verdicts (3 rounds, verified against source)
+
+- R1 claimed per-child worktrees were "the unsolved embarrassment of every
+  subagent package" → R2 retracted after checking `src/runs/shared/worktree.ts`.
+- Homegrown fleet justification: **"none. The number is negative."** Every Design-A
+  feature ships; the leftovers are deliberate load-bearing "no"s (no user argv
+  into adapters, no worktrees inside the checkout). ~1,000 lines owned = cost;
+  benefit = pride.
+- Loader hardening on a personal loader is threat modeling for an attacker who
+  doesn't exist — *unless published to npm*, in which case keep it.
+- **Max concurrent running subagents on one codebase: 3**, maybe 4 with provably
+  disjoint subtrees — merge contention and review bandwidth are the binding
+  constraints, and both scale badly past that.
+
+### 8.4 Role count: how many subagents are actually needed
+
+Shipped taxonomies (pi-subagents 7 builtins, ampi 4, Claude Code ~3) converge on a
+much smaller functional set. **Answer: 4 roles for load-bearing work, 3 for most
+days; concurrency cap 3–4.**
+
+| Role | Tools | Thinking | Covers |
+| --- | --- | --- | --- |
+| `researcher` / scout | read, web_search, fetch_content | medium | code recon AND web research (one role; scout is just this with a lower budget — config, not a role) |
+| `evidence-auditor` | read-only + web re-fetch | high | verifies citations independently; merge into researcher for low-stakes work |
+| `worker` | full local + `contact_supervisor` | high | the only writer; worktree per call |
+| `reviewer` | read, grep, find, ls | high | code/diff verification; oracle is just reviewer-with-your-plan — dropped |
+
+Deleted with prejudice: `scout` (researcher w/ lower thinking), `oracle`
+(decision-consistency is the parent's job), `delegate` (worker w/o personality),
+`librarian` (researcher against GitHub — a tool variant, not a role).
+Parallelism comes from fanning out the *same* role across angles, not new roles.
+Isolation is a **call flag**, not frontmatter — the orchestrator decides.
+
+### 8.5 Final dispositions for this repo
+
+- **`zai-search`: ship** — 396 lines lifted from glm-tweaks' MIT `lib/zai-search.ts`;
+  deletes the pi-web-access dependency for researcher/evidence-auditor children;
+  bills quota we already pay. No provider abstraction, no config surface.
+- **`pi-btw`: install, but audit `/btw:inject` merge-back first** (Gilfoyle
+  dissent: highest-blast-radius code in this comparison — 2.8k lines of unearned
+  trust). Fallback: use side-thread-only until the merge path is reviewed.
+- **pi-fleet / pi-foreman: buried unnamed.** pi-subagents won. The repo stays
+  boring; boring repos still work on Friday.
