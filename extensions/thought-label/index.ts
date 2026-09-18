@@ -95,7 +95,13 @@ export default function (pi: ExtensionAPI) {
 	// message object identity from the restored branch.
 	const histDur = new Map<object, string>();
 	let origUpdate: ((this: any, message: unknown, isStreaming?: boolean) => void) | null = null;
-	let tuiRef: { requestRender: (force?: boolean) => void } | null = null;
+	// TUI ref lives on globalThis: it survives /reload closure generations (the
+	// tagged prototype wrapper is installed once, so a reloaded generation must
+	// read the ref captured by an earlier generation or by the next mount).
+	const gt = globalThis as { __thoughtLabelTui?: { requestRender: (force?: boolean) => void } | null };
+	function getTui() {
+		return gt.__thoughtLabelTui ?? null;
+	}
 	let waveTimer: ReturnType<typeof setInterval> | null = null;
 	let wavePhase = 0;
 
@@ -119,7 +125,7 @@ export default function (pi: ExtensionAPI) {
 			} else if (!inst.isStreaming) {
 				// Completed message (history, or a finished round mid-turn).
 				label = "thought ▸";
-			} else if (waveEnabled && tuiRef) {
+			} else if (waveEnabled && getTui()) {
 				// Streaming: shimmer glyph + text; collapse glyph stays static.
 				const m = raw.match(/^(.*?\S)(\s*▸\s*)$/s);
 				const animatePart = prefix + (m ? m[1] : raw);
@@ -135,7 +141,7 @@ export default function (pi: ExtensionAPI) {
 					suffix
 				);
 			} else {
-				label = prefix + raw;
+				label = raw;
 			}
 			return `${prefix}${label}`;
 		}
@@ -195,7 +201,7 @@ export default function (pi: ExtensionAPI) {
 			if ((proto.mountInteractiveTui as any).__thoughtLabelCapture) return;
 			const orig = proto.mountInteractiveTui;
 			const wrapped = function (this: any, tui: any, components: unknown[]) {
-				if (!tuiRef && tui && typeof tui.requestRender === "function") tuiRef = tui;
+				if (tui && typeof tui.requestRender === "function") gt.__thoughtLabelTui = tui;
 				return orig.call(this, tui, components);
 			} as any;
 			wrapped.__thoughtLabelCapture = true;
@@ -211,7 +217,8 @@ export default function (pi: ExtensionAPI) {
 	}
 
 	function waveTick(): void {
-		if (!turnActive || !tuiRef) return;
+		const tui = getTui();
+		if (!turnActive || !tui) return;
 		wavePhase += 0.6;
 		try {
 			for (const inst of tracked) {
@@ -220,7 +227,7 @@ export default function (pi: ExtensionAPI) {
 				// starts streaming, freeze the shimmer (markdown rebuilds are heavy).
 				if (inst.isStreaming && thinkingOnly(inst)) inst.invalidate();
 			}
-			tuiRef.requestRender();
+			tui.requestRender();
 		} catch {
 			/* animation is cosmetic; never break the session */
 		}
@@ -345,7 +352,9 @@ export default function (pi: ExtensionAPI) {
 		// Everything still unfrozen predates this turn — but if it has a
 		// reconstructed duration from the session file, keep that instead.
 		for (const inst of tracked) {
-			if (!inst.__tlFrozen && !histDur.has(inst.lastMessage)) {
+			// Never freeze a streaming instance: a late agent_start (resume + queued
+			// message) must not strip its upcoming duration.
+			if (!inst.__tlFrozen && !inst.isStreaming && !histDur.has(inst.lastMessage)) {
 				inst.__tlFrozen = "thought ▸";
 				try {
 					if (inst.lastMessage && origUpdate) {
@@ -379,12 +388,15 @@ export default function (pi: ExtensionAPI) {
 					? (now - reqStartMs) / 1000
 					: null;
 		lastDurText = seconds !== null ? fmtDuration(seconds, briefMaxS, briefText) : null;
-		if (!enabled || !lastDurText) return;
-		const label = `thought · ${lastDurText} ▸`;
+		if (!enabled) return;
+		// Resolve every turn instance now — with the measured duration when we
+		// have one, otherwise duration-less. Never leave them dangling for the
+		// next agent_start to sweep with the wrong label.
+		const label = lastDurText ? `thought · ${lastDurText} ▸` : "thought ▸";
 		for (const inst of tracked) {
-			// Only instances born during this turn earn the live-measured duration;
-			// historical ones keep their reconstructed or duration-less label.
-			if (!inst.isStreaming && !inst.__tlFrozen && !histDur.has(inst.lastMessage)) {
+			// agent_end is authoritative: streaming is over, so every turn instance
+			// resolves here (measured duration, or duration-less when untimed).
+			if (!inst.__tlFrozen && !histDur.has(inst.lastMessage)) {
 				inst.__tlFrozen = label;
 			}
 		}
@@ -401,7 +413,7 @@ export default function (pi: ExtensionAPI) {
 			if (!enabled) stopWave();
 			const trackedCount = tracked.size;
 			ctx.ui.notify(
-				`thought-label ${enabled ? "enabled" : "disabled"} · patched:${installed} · tracked:${trackedCount} · hist:${histDur.size} · lastDur:${lastDurText ?? "—"} · wave:${waveEnabled && tuiRef ? "on" : "off"}`,
+				`thought-label ${enabled ? "enabled" : "disabled"} · patched:${installed} · tracked:${trackedCount} · hist:${histDur.size} · lastDur:${lastDurText ?? "—"} · wave:${waveEnabled && getTui() ? "on" : "off"}`,
 				"info",
 			);
 			if (enabled) reRenderTracked();
