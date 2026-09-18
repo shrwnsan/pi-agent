@@ -32,37 +32,16 @@
  */
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 import { AssistantMessageComponent } from "@earendil-works/pi-coding-agent";
-import { readFileSync } from "node:fs";
+import { loadTierConfig, resolveTierGlyph } from "../../lib/tier-glyphs.ts";
 import { homedir } from "node:os";
 import { join } from "node:path";
 
 interface ThoughtLabelConfig {
-	tier?: "unicode" | "nerd" | "ascii";
-	nerdGlyph?: string;
 	briefMaxS?: number;
 	briefText?: string;
-	disabled?: boolean;
 }
 
-const CONFIG_PATH = join(homedir(), ".pi", "agent", "thought-label.json");
-const GLYPHS: Record<NonNullable<ThoughtLabelConfig["tier"]>, string> = {
-	unicode: "\u2615\uFE0E", // ☕︎ (text presentation, no emoji color)
-	nerd: "", // filled from config.nerdGlyph; falls back to unicode when unset
-	ascii: "",
-};
-
-function loadConfig(): ThoughtLabelConfig {
-	try {
-		const raw = JSON.parse(readFileSync(CONFIG_PATH, "utf8")) as ThoughtLabelConfig;
-		return typeof raw === "object" && raw !== null ? raw : {};
-	} catch {
-		return {};
-	}
-}
-
-function fmtDuration(seconds: number, cfg: ThoughtLabelConfig): string {
-	const briefMaxS = cfg.briefMaxS ?? 4;
-	const briefText = cfg.briefText ?? "a few seconds";
+function fmtDuration(seconds: number, briefMaxS: number, briefText: string): string {
 	if (seconds < briefMaxS) return briefText;
 	if (seconds < 60) return `${Math.round(seconds)}s`;
 	const m = Math.floor(seconds / 60);
@@ -71,11 +50,10 @@ function fmtDuration(seconds: number, cfg: ThoughtLabelConfig): string {
 }
 
 export default function (pi: ExtensionAPI) {
-	const cfg = loadConfig();
+	const CONFIG_PATH = join(homedir(), ".pi", "agent", "thought-label.json");
+	const cfg = loadTierConfig<ThoughtLabelConfig & { tier?: "unicode" | "nerd" | "ascii"; nerdGlyph?: string; disabled?: boolean }>(CONFIG_PATH);
 	let enabled = cfg.disabled !== true;
-	const tier = cfg.tier ?? "unicode";
-	const prefix =
-		tier === "ascii" ? "" : tier === "nerd" ? cfg.nerdGlyph || GLYPHS.unicode : GLYPHS.unicode;
+	const prefix = resolveTierGlyph(cfg, { unicode: "\u2615\uFE0E" }); // ☕︎ text presentation
 	const briefMaxS = cfg.briefMaxS ?? 4;
 	const briefText = cfg.briefText ?? "a few seconds";
 
@@ -158,7 +136,7 @@ export default function (pi: ExtensionAPI) {
 				: reqStartMs !== null
 					? (now - reqStartMs) / 1000
 					: null;
-		lastDurText = seconds !== null ? fmtDuration(seconds, { briefMaxS, briefText }) : null;
+		lastDurText = seconds !== null ? fmtDuration(seconds, briefMaxS, briefText) : null;
 		freezeCompletedTurns();
 	});
 

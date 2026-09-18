@@ -1,13 +1,13 @@
 /**
  * tps — per-run telemetry notification, footer-dialect edition.
  *
- *   󱐌24.2tps ↑104k ↓864 Σ110k R4.2M W0 H99.8% · 35.7s   (R/W/H omitted when no cache)
- *   ⚡︎24.2tps ↑104k ↓864 Σ110k · 35.7s                  (unicode tier, no cache)
+ *   󱐌24.2tps ↑104k ↓864 Σ110k R4.2M W0.0 H99.8% · 35.7s   (R/W/H omitted when no cache)
+ *   ⚡︎24.2tps ↑104k ↓864 Σ110k · 35.7s                    (unicode tier, no cache)
  *
- * Glyph tiers mirror minimal-mode's convention: unicode (default, renders
- * everywhere), nerd (paste your NF flash glyph into the config), ascii (none).
+ * Glyph tiers via lib/tier-glyphs.ts (unicode default, nerd via config, ascii).
  * ↑ input · ↓ output · Σ total · R cache-read · W cache-write · H cache-hit %
  * (H uses the footer's own formula: cacheRead / (input + cacheRead + cacheWrite)).
+ * Zero-valued token counts render as "0.0" — measured-float-zero, not absent.
  * Cumulative context/caching stays the footer's job — this line is per-run.
  *
  * Config (~/.pi/agent/tps.json, all optional):
@@ -17,35 +17,19 @@
  * Toggle in-session: /tps
  */
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
-import { readFileSync } from "node:fs";
+import { loadTierConfig, resolveTierGlyph } from "../lib/tier-glyphs.ts";
 import { homedir } from "node:os";
 import { join } from "node:path";
 
 interface TpsConfig {
-	tier?: "unicode" | "nerd" | "ascii";
-	nerdGlyph?: string;
 	showTotal?: boolean;
-	disabled?: boolean;
 }
 
 const CONFIG_PATH = join(homedir(), ".pi", "agent", "tps.json");
-const GLYPHS: Record<NonNullable<TpsConfig["tier"]>, string> = {
-	unicode: "\u26A1\uFE0E", // ⚡︎ text presentation
-	nerd: "", // filled from config.nerdGlyph; falls back to unicode when unset
-	ascii: "",
-};
 
-function loadConfig(): TpsConfig {
-	try {
-		const raw = JSON.parse(readFileSync(CONFIG_PATH, "utf8")) as TpsConfig;
-		return typeof raw === "object" && raw !== null ? raw : {};
-	} catch {
-		return {};
-	}
-}
-
-/** 864 → "864", 103783 → "103.8k", 4200000 → "4.2M" */
+/** 864 → "864", 103783 → "103.8k", 4200000 → "4.2M"; exact zero → "0.0" */
 function humanize(n: number): string {
+	if (n === 0) return "0.0";
 	if (n >= 1_000_000) {
 		const m = n / 1_000_000;
 		return `${m >= 100 ? Math.round(m) : Math.round(m * 10) / 10}M`;
@@ -58,11 +42,10 @@ function humanize(n: number): string {
 }
 
 export default function (pi: ExtensionAPI) {
-	const cfg = loadConfig();
+	const cfg = loadTierConfig<TpsConfig & { tier?: "unicode" | "nerd" | "ascii"; nerdGlyph?: string; disabled?: boolean }>(CONFIG_PATH);
 	let tpsEnabled = cfg.disabled !== true;
 	let agentStartMs: number | null = null;
-	const tier = cfg.tier ?? "unicode";
-	const glyph = tier === "ascii" ? "" : tier === "nerd" ? cfg.nerdGlyph || GLYPHS.unicode : GLYPHS.unicode;
+	const glyph = resolveTierGlyph(cfg, { unicode: "\u26A1\uFE0E" }); // ⚡︎ text presentation
 	const showTotal = cfg.showTotal !== false;
 
 	pi.registerCommand("tps", {
