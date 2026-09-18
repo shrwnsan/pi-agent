@@ -59,6 +59,7 @@ export default function (pi: ExtensionAPI) {
 
 	let installed = false;
 	let installNote = "";
+	let replacedStale = false;
 	const tracked = new Set<any>();
 
 	// Current turn timing state. respMs = first provider roundtrip of the turn
@@ -75,19 +76,30 @@ export default function (pi: ExtensionAPI) {
 				installNote = "thought-label: AssistantMessageComponent seam missing — disabled";
 				return false;
 			}
-			if (Object.getOwnPropertyDescriptor(proto, "hiddenThinkingLabel")) {
-				installNote = "thought-label: hiddenThinkingLabel is no longer a plain field — disabled";
-				return false;
+			const existing = Object.getOwnPropertyDescriptor(proto, "hiddenThinkingLabel");
+			if (existing) {
+				// Idempotent reload: our own tagged accessor from this generation.
+				if ((existing.get as any)?.__thoughtLabelPatch) return true;
+				// Stale accessor from a pre-fix generation of this extension — its
+				// closure died with the previous /reload, so its state is frozen
+				// garbage. Replace it. Bail only if it isn't replaceable.
+				if (!existing.configurable) {
+					installNote = "thought-label: hiddenThinkingLabel accessor is not replaceable — disabled";
+					return false;
+				}
+				replacedStale = true;
 			}
+			const get = function (this: any) {
+				if (!enabled) return this.__tlRaw ?? "Thinking...";
+				if (this.__tlFrozen) return prefix + this.__tlFrozen;
+				if (turnActive) return prefix + (this.__tlRaw ?? "Thinking...");
+				if (lastDurText) return `${prefix}Thought · ${lastDurText}`;
+				return prefix + (this.__tlRaw ?? "Thinking...");
+			} as any;
+			get.__thoughtLabelPatch = true; // reload idempotency marker
 			Object.defineProperty(proto, "hiddenThinkingLabel", {
 				configurable: true,
-				get(this: any) {
-					if (!enabled) return this.__tlRaw ?? "Thinking...";
-					if (this.__tlFrozen) return prefix + this.__tlFrozen;
-					if (turnActive) return prefix + (this.__tlRaw ?? "Thinking...");
-					if (lastDurText) return `${prefix}Thought · ${lastDurText}`;
-					return prefix + (this.__tlRaw ?? "Thinking...");
-				},
+				get,
 				set(this: any, v: string) {
 					this.__tlRaw = typeof v === "string" ? v : "Thinking...";
 					tracked.add(this);
@@ -110,6 +122,9 @@ export default function (pi: ExtensionAPI) {
 
 	pi.on("session_start", async (_event, ctx) => {
 		installed = install();
+		if (installed && replacedStale && ctx.hasUI) {
+			ctx.ui.notify("thought-label: replaced stale patch from earlier load", "info");
+		}
 		if (!installed && ctx.hasUI && installNote) ctx.ui.notify(installNote, "warning");
 	});
 
