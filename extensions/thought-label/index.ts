@@ -104,6 +104,8 @@ export default function (pi: ExtensionAPI) {
 		const raw = inst.__tlRaw ?? "Thinking...";
 		if (!enabled) return raw;
 		if (inst.__tlFrozen) return prefix + inst.__tlFrozen;
+		const hist = histDur.get(inst.lastMessage);
+		if (hist) return prefix + hist;
 		// Completed message (history, or a finished round mid-turn): isStreaming is
 		// false the moment the component is constructed for a non-streaming
 		// message. Duration unknown until agent_end freezes turn instances.
