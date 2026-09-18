@@ -1,13 +1,14 @@
 /**
  * tps — per-run telemetry notification, footer-dialect edition.
  *
- *   󱐌24.2tps ↑104k ↓864 Σ110k R4.2M W0 · 35.7s   (R/W omitted when both zero)
- *   ⚡︎24.2tps ↑104k ↓864 Σ110k · 35.7s           (unicode tier, no cache)
+ *   󱐌24.2tps ↑104k ↓864 Σ110k R4.2M W0 H99.8% · 35.7s   (R/W/H omitted when no cache)
+ *   ⚡︎24.2tps ↑104k ↓864 Σ110k · 35.7s                  (unicode tier, no cache)
  *
  * Glyph tiers mirror minimal-mode's convention: unicode (default, renders
  * everywhere), nerd (paste your NF flash glyph into the config), ascii (none).
- * ↑ input · ↓ output · Σ total · R cache-read · W cache-write. Cumulative
- * context/caching stays the footer's job — this line is per-run.
+ * ↑ input · ↓ output · Σ total · R cache-read · W cache-write · H cache-hit %
+ * (H uses the footer's own formula: cacheRead / (input + cacheRead + cacheWrite)).
+ * Cumulative context/caching stays the footer's job — this line is per-run.
  *
  * Config (~/.pi/agent/tps.json, all optional):
  *   { "tier": "unicode" | "nerd" | "ascii", "nerdGlyph": "󱐌",
@@ -109,6 +110,13 @@ export default function (pi: ExtensionAPI) {
 		if (showTotal) parts.push(`Σ${humanize(totalTokens)}`);
 		if (cacheRead > 0 || cacheWrite > 0) {
 			parts.push(`R${humanize(cacheRead)}`, `W${humanize(cacheWrite)}`);
+			if (cacheRead > 0) {
+				// Footer formula: hit% = cacheRead / (input + cacheRead + cacheWrite)
+				const promptTokens = input + cacheRead + cacheWrite;
+				if (promptTokens > 0) {
+					parts.push(`H${((cacheRead / promptTokens) * 100).toFixed(1)}%`);
+				}
+			}
 		}
 		parts.push(`· ${elapsedSeconds.toFixed(1)}s`);
 
