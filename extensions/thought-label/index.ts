@@ -293,9 +293,9 @@ export default function (pi: ExtensionAPI) {
 		if (!enabled || !lastDurText) return;
 		const label = `Thought · ${lastDurText} ▸`;
 		for (const inst of tracked) {
-			// Only instances born during this turn earn the duration; historical
-			// ones were frozen to duration-less "Thought ▸" at agent_start.
-			if (!inst.isStreaming && !inst.__tlFrozen) {
+			// Only instances born during this turn earn the live-measured duration;
+			// historical ones keep their reconstructed or duration-less label.
+			if (!inst.isStreaming && !inst.__tlFrozen && !histDur.has(inst.lastMessage)) {
 				inst.__tlFrozen = label;
 			}
 		}
