@@ -237,3 +237,54 @@ Isolation is a **call flag**, not frontmatter — the orchestrator decides.
   trust). Fallback: use side-thread-only until the merge path is reviewed.
 - **pi-fleet / pi-foreman: buried unnamed.** pi-subagents won. The repo stays
   boring; boring repos still work on Friday.
+
+## 9. Security review: pi-subagents (whitehat pass, 2026-09-17)
+
+Scope: v0.68.0 tarball. Static review of supply chain, egress, sandbox, spawn
+surfaces, agent discovery, schedules. **Not** audited line-by-line: the full
+22.9k-line background runner internals, jiti/acorn supply chains, and the
+separate `pi-web-access` package. `contact_supervisor` bridge validation was
+spot-checked (permissions module exists) but not exhaustively traced.
+
+### 9.1 Clean bills
+
+- **Supply chain**: 5 runtime deps (acorn, yaml, typebox, jiti, undici — all
+  small, mainstream); **no install scripts** in package.json; ships auditable
+  `.ts` source; `install.mjs` is a manual git-clone path unused by
+  `pi install npm:`.
+- **Egress**: **zero `fetch()` calls in `src/`**. undici is used only to install
+  a proxy-aware dispatcher for the background runner. The two https URLs found
+  are schema identifier strings, not requests. No telemetry/analytics anywhere.
+- **workflowScript sandbox**: executes in a `worker_threads` Worker + `node:vm`
+  with `codeGeneration: { strings: false, wasm: false }` (blocks the classic
+  eval/Function vm escapes), no `require`/`process` in context, deep-frozen
+  `args`, JSON-only emissions, promise-accountability hooks so children can't be
+  fire-and-forget. Honest about being blunder-protection, not a hard boundary —
+  but the author (parent model) already has bash anyway.
+- **`runs.host` exec**: `shell: true` but commands only reach it via
+  extension-owned **named resources** with provenance permits; raw scripts are
+  refused. Output paths: cwd-relative traversal rejection, regular-non-linked
+  file checks, atomic replace. Timeouts + owned process-tree termination.
+- **Worktrees**: fail-closed placement rejection before `git worktree add`;
+  dedicated-root policy; cleanup plans.
+- **External-CLI adapters**: adapter ids locked to the code-owned set
+  (claude-code/codex-exec/cursor-agent); binary availability preflight
+  (`runner.available`) that the parent must confirm before launch.
+- **Children**: strict tool allowlists, never inherit ambient parent extensions
+  by default; Windows cmd.exe quoting handled explicitly.
+
+### 9.2 Findings
+
+| # | Sev | Finding | Hardening |
+| --- | --- | --- | --- |
+| 1 | **Medium** | Project-scope agent discovery defaults ON (`agentScope: "both"`). Cloned repos' `.agents/**/*.md` / project agents load by default; file-defined agents may declare `runner: { type: "external-cli", command: <free string> }` → arbitrary binary execution **if** the model selects that agent (gated by `runner.available` + parent confirmation; catalog advertisement is separately opt-in). | `"agentScope": "user"` when cloning untrusted repos; treat repo agent files like repo Makefiles/CI configs. |
+| 2 | **Medium** | Schedules default ON (`scheduledRuns.enabled !== false`) and the store is repo-relative (`<project>/.pi/subagents/schedules`). A cloned repo shipping pre-seeded schedule records is a plausible persistence vector (record validation on load not verified; confirmed `auto-drain` is NOT a trigger — it only waits on launched children). | `"scheduledRuns": { "enabled": false }` until cron features are wanted. |
+| 3 | Low | `runs.host` shells out (`shell: true`) | Safe under named-resource provenance; never add user-argv resources. |
+| 4 | Info | `contact_supervisor` live parent↔child channel | Permissions module exists; trace fully before enabling nested supervisor flows. |
+
+### 9.3 Verdict
+
+**Conditional GO.** Cleanest security posture of anything reviewed in this doc —
+zero telemetry, zero unexpected egress, layered validation with provenance and
+ownership checks, shipped with smoke tests. Apply findings 1–2's two config keys
+at install time and re-evaluate if cloning untrusted repos into project dirs.
