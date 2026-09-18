@@ -41,7 +41,7 @@
  *   { "tier": "nerd" | "unicode" | "ascii",   ← default "nerd" (md-brain 󰧑)
  *     "nerdGlyph": "<swap NF glyph, e.g. md-thought_bubble 󰟶>",
  *     "briefMaxS": 4, "briefText": "a few seconds",
- *     "wave": true, "waveMs": 130,
+ *     "wave": true, "waveMs": 80,
  *     "disabled": false }
  *   Stock (non-NF) machines: { "tier": "unicode" } → big ☕ via system emoji.
  *   Wave uses standard SGR faint/bold — degrades to plain text if unsupported.
@@ -83,7 +83,7 @@ export default function (pi: ExtensionAPI) {
 	const briefMaxS = cfg.briefMaxS ?? 4;
 	const briefText = cfg.briefText ?? "a few seconds";
 	const waveEnabled = cfg.wave !== false;
-	const waveMs = Math.max(60, cfg.waveMs ?? 130);
+	const waveMs = Math.max(50, cfg.waveMs ?? 80);
 
 	let installed = false;
 	let installNote = "";
@@ -129,7 +129,7 @@ export default function (pi: ExtensionAPI) {
 					[...animatePart]
 						.map((ch, i) => {
 							// Faint troughs travelling through otherwise-normal chars.
-							return Math.sin(i * 0.9 - wavePhase * 1.1) < -0.5 ? `\x1b[2m${ch}\x1b[22m` : ch;
+							return Math.sin(i * 0.9 - wavePhase) < -0.5 ? `\x1b[2m${ch}\x1b[22m` : ch;
 						})
 						.join("") +
 					suffix
@@ -209,7 +209,7 @@ export default function (pi: ExtensionAPI) {
 
 	function waveTick(): void {
 		if (!turnActive || !tuiRef) return;
-		wavePhase++;
+		wavePhase += 0.6;
 		try {
 			for (const inst of tracked) {
 				// Only invalidate thinking-only streaming instances: the rebuild is
