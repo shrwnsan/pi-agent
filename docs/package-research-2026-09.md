@@ -288,3 +288,74 @@ spot-checked (permissions module exists) but not exhaustively traced.
 zero telemetry, zero unexpected egress, layered validation with provenance and
 ownership checks, shipped with smoke tests. Apply findings 1–2's two config keys
 at install time and re-evaluate if cloning untrusted repos into project dirs.
+
+## 10. Build plan v2 (post-security-review)
+
+The fleet build stays dead (§8.3); the review settled *what any future build must
+look like*: small enough that its security-review equivalent fits on one page.
+
+### 10.1 Lift list (pi-subagents is MIT — verified 2026-09-17)
+
+| Liftable | Size | Verdict |
+| --- | --- | --- |
+| `host-command.ts` output-path validation (traversal rejection, regular-non-linked file check, atomic replace) | ~100 lines | ✅ leaf module, lift as-is |
+| vm/worker sandbox (`WORKER_SOURCE` + `codeGeneration: {strings:false, wasm:false}` context) | ~200 lines | ✅ only if we ever ship scriptable workflows — skip v1 |
+| `worktree.ts` **placement checks only** (fail-closed before `git worktree add`) | ~100 lines | ✅ the checks, not the manager |
+| Worktree manager | 1,516+ lines | ❌ hub — use henryqw's 275-line shape as the rewrite reference instead |
+| `parallel-groups` / registries / missions | 2.6k–22k lines | ❌ hubs — extraction cost exceeds rewrite cost |
+| ampi loader-hardening checklist (§2) | ~100 lines of guards | ✅ pattern, reimplement; lighten to personal-disk threat model unless published |
+| glm-tweaks `lib/zai-search.ts` | 396 lines | ✅ already planned (Phase 1) |
+
+Rule the review taught: **lift leaf validators and checklists; never lift hubs.**
+
+### 10.2 Exhumation triggers for `foreman` (dormant)
+
+Build only when **two or more** fire:
+
+1. pi-subagents unmaintained (~6 months without commits/releases) or yanked /
+   compromised.
+2. A security finding relevant to our threat model that the maintainer won't fix
+   (e.g., findings 1–2 class).
+3. Daily friction: config weight or architecture fights that cost more than the
+   capability is worth over a sustained period.
+4. A repeated capability gap in real use (not hypothetical).
+
+One trigger alone → document it here and wait.
+
+### 10.3 Phases
+
+**Phase 0 — today.** `pi install npm:pi-subagents npm:pi-btw`; pin exact versions
+in `~/.pi/agent/settings.json`; apply hardening keys (`agentScope: "user"`,
+`scheduledRuns.enabled: false`); 2-week trial.
+
+**Phase 1 — this week.** `zai-search` in this repo (`extensions/zai-search/`):
+
+- 396 lines lifted from glm-tweaks `lib/zai-search.ts` (MIT), zero deps.
+- Registers `zai_web_search` via `pi.registerTool` — usable by parent **and**
+  pi-subagents children (tools list must name it explicitly; children never
+  inherit ambient tools).
+- Follow-up (v1.1): drop-in `researcher`/`evidence-auditor` agent markdown
+  variants that list `zai_web_search` in place of pi-web-access's four tools, so
+  those builtins work off Coding-Plan quota. Exact discovery mechanism verified
+  at build time (user config agents dir vs project).
+- Security spec: single endpoint allowlist (`api.z.ai/api/mcp/...`), 45s
+  timeout, key via standard pi auth resolution, no telemetry, no other egress.
+
+**Phase 2 — this week, small.** `/btw:inject` merge-path audit: confirm
+`sendUserMessage(..., { deliverAs: "followUp" })` lands as a queued user message
+(no direct context write), check nothing else writes session entries. Verdict
+recorded here; fallback is side-thread-only usage.
+
+**Phase 3 — dormant.** `foreman` v1 only on §10.2 triggers. Budget ~800 lines,
+zero deps (or +`yaml`): in-process `createAgentSession` runner (gen-3),
+task registry + `task_poll`/`task_wait`/`task_cancel`, `group:` keys,
+harden-list markdown agents, worktrees via lifted placement checks +
+henryqw-sized manager, `zai-search` as its web tool. Security spec = §9.1 as a
+checklist; the whole extension's review must fit on one page.
+
+### 10.4 Update-cadence security ritual (pi-subagents)
+
+On every version bump: re-run the §9.1 greps (fetch/telemetry/endpoints), read
+the changelog for new exec surfaces or config keys, confirm findings 1–2's
+config keys still hold. Documented ~30-minute job; skip only for patch bumps
+with boring changelogs.
