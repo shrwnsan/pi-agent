@@ -88,6 +88,12 @@ export default function (pi: ExtensionAPI) {
 	let installed = false;
 	let installNote = "";
 	const tracked = new Set<any>();
+	// Historical durations, reconstructed at session_start from session-entry
+	// timestamps: assistant-entry ts − previous branch-entry ts (entries are
+	// written at completion, so the gap = generation time of that message —
+	// same semantics as the live first-roundtrip measurement). Keyed by the
+	// message object identity from the restored branch.
+	const histDur = new Map<object, string>();
 	let origUpdate: ((this: any, message: unknown, isStreaming?: boolean) => void) | null = null;
 	let tuiRef: { requestRender: (force?: boolean) => void } | null = null;
 	let waveTimer: ReturnType<typeof setInterval> | null = null;
@@ -222,7 +228,21 @@ export default function (pi: ExtensionAPI) {
 				} catch {
 					/* never break rendering */
 				}
-				return orig.call(this, message, isStreaming);
+				const res = orig.call(this, message, isStreaming);
+				try {
+					// Historical block with a reconstructed duration: freeze + re-bake
+					// once (the first bake happened before the freeze was known).
+					if (enabled && !this.__tlFrozen && this.lastMessage) {
+						const hist = histDur.get(this.lastMessage);
+						if (hist) {
+							this.__tlFrozen = hist;
+							orig.call(this, this.lastMessage);
+						}
+					}
+				} catch {
+					/* cosmetic only */
+				}
+				return res;
 			} as any;
 			wrapped.__thoughtLabelPatch = true; // reload idempotency marker
 			proto.updateContent = wrapped;
@@ -255,6 +275,22 @@ export default function (pi: ExtensionAPI) {
 
 	pi.on("session_start", async (_event, ctx) => {
 		if (!installed) installed = install();
+		// Reconstruct historical thinking durations from session-entry timestamps.
+		try {
+			const branch = (ctx as any).sessionManager?.getBranch?.() ?? [];
+			let prevTs: number | null = null;
+			for (const entry of branch as any[]) {
+				const ts = entry?.timestamp ? Date.parse(entry.timestamp) : NaN;
+				const msg = entry?.type === "message" ? entry.message : null;
+				if (msg?.role === "assistant" && !Number.isNaN(prevTs) && !Number.isNaN(ts) && ts > prevTs) {
+					const secs = (ts - prevTs) / 1000;
+					if (secs < 3600) histDur.set(msg, `Thought · ${fmtDuration(secs, briefMaxS, briefText)} ▸`);
+				}
+				prevTs = Number.isNaN(ts) ? prevTs : ts;
+			}
+		} catch {
+			/* reconstruction is best-effort */
+		}
 		if (!installed && ctx.hasUI && installNote) ctx.ui.notify(installNote, "warning");
 	});
 
@@ -262,11 +298,10 @@ export default function (pi: ExtensionAPI) {
 		turnActive = true;
 		reqStartMs = null;
 		respEndMs = null;
-		// Everything still unfrozen predates this turn (session history, earlier
-		// turns rendered before the extension loaded). Freeze them to a duration-
-		// less "Thought" so agent_end never stamps them with this turn's number.
+		// Everything still unfrozen predates this turn — but if it has a
+		// reconstructed duration from the session file, keep that instead.
 		for (const inst of tracked) {
-			if (!inst.__tlFrozen) inst.__tlFrozen = "Thought ▸";
+			if (!inst.__tlFrozen && !histDur.has(inst.lastMessage)) inst.__tlFrozen = "Thought ▸";
 		}
 		startWave();
 	});
@@ -312,7 +347,7 @@ export default function (pi: ExtensionAPI) {
 			if (!enabled) stopWave();
 			const trackedCount = tracked.size;
 			ctx.ui.notify(
-				`thought-label ${enabled ? "enabled" : "disabled"} · patched:${installed} · tracked:${trackedCount} · lastDur:${lastDurText ?? "—"} · wave:${waveEnabled && tuiRef ? "on" : "off"}`,
+				`thought-label ${enabled ? "enabled" : "disabled"} · patched:${installed} · tracked:${trackedCount} · hist:${histDur.size} · lastDur:${lastDurText ?? "—"} · wave:${waveEnabled && tuiRef ? "on" : "off"}`,
 				"info",
 			);
 			if (enabled) reRenderTracked();
