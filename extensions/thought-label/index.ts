@@ -152,8 +152,15 @@ export default function (pi: ExtensionAPI) {
 		}
 	}
 
+	// Install immediately at extension-load time — BEFORE the session transcript
+	// renders, so resumed/history blocks get instrumented from their very first
+	// updateContent call. session_start can fire after initial rendering on
+	// resume, which left historical blocks stock (the "back to Thinking..."
+	// regression). Failure notice still waits for session_start (needs UI).
+	installed = install();
+
 	pi.on("session_start", async (_event, ctx) => {
-		installed = install();
+		if (!installed) installed = install();
 		if (!installed && ctx.hasUI && installNote) ctx.ui.notify(installNote, "warning");
 	});
 
