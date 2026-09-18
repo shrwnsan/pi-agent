@@ -324,11 +324,13 @@ One trigger alone → document it here and wait.
 
 ### 10.3 Phases
 
-**Phase 0 — today.** `pi install npm:pi-subagents npm:pi-btw`; pin exact versions
+Status legend: ⬜ pending · 🔄 in test · ✅ shipped · 💤 dormant.
+
+**Phase 0 — today.** ⬜ `pi install npm:pi-subagents npm:pi-btw`; pin exact versions
 in `~/.pi/agent/settings.json`; apply hardening keys (`agentScope: "user"`,
 `scheduledRuns.enabled: false`); 2-week trial.
 
-**Phase 1 — this week.** `zai-search` in this repo (`extensions/zai-search/`):
+**Phase 1 — this week.** ⬜ `zai-search` in this repo (`extensions/zai-search/`):
 
 - 396 lines lifted from glm-tweaks `lib/zai-search.ts` (MIT), zero deps.
 - Registers `zai_web_search` via `pi.registerTool` — usable by parent **and**
@@ -341,12 +343,12 @@ in `~/.pi/agent/settings.json`; apply hardening keys (`agentScope: "user"`,
 - Security spec: single endpoint allowlist (`api.z.ai/api/mcp/...`), 45s
   timeout, key via standard pi auth resolution, no telemetry, no other egress.
 
-**Phase 2 — this week, small.** `/btw:inject` merge-path audit: confirm
+**Phase 2 — this week, small.** ⬜ `/btw:inject` merge-path audit: confirm
 `sendUserMessage(..., { deliverAs: "followUp" })` lands as a queued user message
 (no direct context write), check nothing else writes session entries. Verdict
 recorded here; fallback is side-thread-only usage.
 
-**Phase 3 — dormant.** `foreman` v1 only on §10.2 triggers. Budget ~800 lines,
+**Phase 3 — dormant.** 💤 `foreman` v1 only on §10.2 triggers. Budget ~800 lines,
 zero deps (or +`yaml`): in-process `createAgentSession` runner (gen-3),
 task registry + `task_poll`/`task_wait`/`task_cancel`, `group:` keys,
 harden-list markdown agents, worktrees via lifted placement checks +
@@ -403,3 +405,17 @@ dist:
 
 Renumber note: Phase 3 (dormant foreman) stays last; QoL slots as 2.5 between
 the btw audit and it.
+
+### 10.6 Phase 2.5 status (2026-09-17)
+
+- ✅ **tps v2** shipped — footer-dialect line (󱐌/⚡︎ tiers, ↑↓ Σ R W H),
+  zero-state `0.0`, shared `lib/tier-glyphs.ts` (also consumed by
+  thought-label; minimal-mode deliberately untouched). Commits `79187d8`,
+  `46dffcb`, `7729931`.
+- 🔄 **thought-label experiment** shipped — prototype-accessor patch on
+  `AssistantMessageComponent`, glyph prefix, per-turn frozen `Thought · Xs`,
+  capability-probed self-disable. Commits `79187d8`, `7729931`. In live test
+  after `/reload`.
+- ⏳ README extensions-table entries — parked until live-render sign-off.
+- ⏸ upstream thinking-label issue/PR — on hold per owner; interim patch is the
+  current vehicle. Revisit if the patch chafes or a pi upgrade breaks the seam.
