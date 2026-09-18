@@ -107,34 +107,40 @@ export default function (pi: ExtensionAPI) {
 	let lastDurText: string | null = null;
 
 	function liveLabel(inst: any): string {
-		const raw = inst.__tlRaw ?? "Thinking...";
+		let raw = (inst.__tlRaw ?? "Thinking...").toLowerCase();
 		if (!enabled) return raw;
-		if (inst.__tlFrozen) return prefix + inst.__tlFrozen;
-		const hist = histDur.get(inst.lastMessage);
-		if (hist) return prefix + hist;
-		// Completed message (history, or a finished round mid-turn): isStreaming is
-		// false the moment the component is constructed for a non-streaming
-		// message. Duration unknown until agent_end freezes turn instances.
-		if (!inst.isStreaming) return `${prefix}Thought ▸`;
-		// Streaming: shimmer the text, keep the trailing collapse glyph static.
-		if (waveEnabled && tuiRef) {
-			const m = raw.match(/^(.*?\S)(\s*▸\s*)$/s);
-			const animatePart = m ? m[1] : raw;
-			const suffix = m ? m[2] : "";
-			return (
-				prefix +
-				[...animatePart]
-					.map((ch, i) => {
-						const lvl = Math.sin(i * 0.9 - wavePhase * 1.1);
-						if (lvl > 0.5) return `\x1b[1m${ch}\x1b[22m`; // bold crest
-						if (lvl < -0.5) return `\x1b[2m${ch}\x1b[22m`; // faint trough
-						return ch;
-					})
-					.join("") +
-				suffix
-			);
+		let label: string;
+		if (inst.__tlFrozen) {
+			label = inst.__tlFrozen;
+		} else {
+			const hist = histDur.get(inst.lastMessage);
+			if (hist) {
+				label = hist;
+			} else if (!inst.isStreaming) {
+				// Completed message (history, or a finished round mid-turn).
+				label = "thought ▸";
+			} else if (waveEnabled && tuiRef) {
+				// Streaming: shimmer glyph + text; collapse glyph stays static.
+				const m = raw.match(/^(.*?\S)(\s*▸\s*)$/s);
+				const animatePart = prefix + (m ? m[1] : raw);
+				const suffix = m ? m[2] : "";
+				// Leading SGR 23 cancels pi's outer italic on the baked label.
+				return (
+					"\x1b[23m" +
+					[...animatePart]
+						.map((ch, i) => {
+							// Faint troughs travelling through otherwise-normal chars.
+							return Math.sin(i * 0.9 - wavePhase * 1.1) < -0.5 ? `\x1b[2m${ch}\x1b[22m` : ch;
+						})
+						.join("") +
+					suffix
+				);
+			} else {
+				label = prefix + raw;
+			}
+			return `\x1b[23m${prefix}${label}`;
 		}
-		return prefix + raw;
+		return `\x1b[23m${prefix}${label}`;
 	}
 
 	/** Swap one instance's own data property for an own accessor we control. */
@@ -284,7 +290,7 @@ export default function (pi: ExtensionAPI) {
 				const msg = entry?.type === "message" ? entry.message : null;
 				if (msg?.role === "assistant" && !Number.isNaN(prevTs) && !Number.isNaN(ts) && ts > prevTs) {
 					const secs = (ts - prevTs) / 1000;
-					if (secs < 3600) histDur.set(msg, `Thought · ${fmtDuration(secs, briefMaxS, briefText)} ▸`);
+					if (secs < 3600) histDur.set(msg, `thought · ${fmtDuration(secs, briefMaxS, briefText)} ▸`);
 				}
 				prevTs = Number.isNaN(ts) ? prevTs : ts;
 			}
@@ -301,7 +307,7 @@ export default function (pi: ExtensionAPI) {
 		// Everything still unfrozen predates this turn — but if it has a
 		// reconstructed duration from the session file, keep that instead.
 		for (const inst of tracked) {
-			if (!inst.__tlFrozen && !histDur.has(inst.lastMessage)) inst.__tlFrozen = "Thought ▸";
+			if (!inst.__tlFrozen && !histDur.has(inst.lastMessage)) inst.__tlFrozen = "thought ▸";
 		}
 		startWave();
 	});
@@ -326,7 +332,7 @@ export default function (pi: ExtensionAPI) {
 					: null;
 		lastDurText = seconds !== null ? fmtDuration(seconds, briefMaxS, briefText) : null;
 		if (!enabled || !lastDurText) return;
-		const label = `Thought · ${lastDurText} ▸`;
+		const label = `thought · ${lastDurText} ▸`;
 		for (const inst of tracked) {
 			// Only instances born during this turn earn the live-measured duration;
 			// historical ones keep their reconstructed or duration-less label.
