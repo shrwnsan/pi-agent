@@ -155,7 +155,10 @@ export default function (pi: ExtensionAPI) {
 			while (stack.length) {
 				const node = stack.shift();
 				if (!node) continue;
-				if (typeof node.text === "string" && /\x1b\[3m[\s\S]*(?:thought|thinking)/i.test(node.text)) {
+				// Wave faint-marks split words with SGR codes — match on the
+				// ANSI-stripped plain text, not the raw bytes.
+				const plain = typeof node.text === "string" ? node.text.replace(/\x1b\[[0-9;]*[A-Za-z]/g, "") : "";
+				if (typeof node.text === "string" && /\x1b\[3m/.test(node.text) && /thought|thinking/i.test(plain)) {
 					const cleaned = node.text.replace(/\x1b\[3m/g, "").replace(/\x1b\[23m/g, "");
 					if (cleaned !== node.text) node.setText(cleaned);
 					return; // label found and cleaned
