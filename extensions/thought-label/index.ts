@@ -1,9 +1,9 @@
 /**
  * Thought Label — collapsed thinking header experiment. VERSION-LOCKED to pi 0.85.x.
  *
- * Want:  "☕︎ Thinking...  ▸" while a turn streams
- *        "☕︎ Thought · 4s  ▸" once it ends (or "Thought · a few seconds" for short ones)
- *        "☕︎ Thought  ▸" for pre-extension historical blocks (duration unknown)
+ * Want:  "󰧑 Thinking... ▸" (animated shimmer on "Thinking...") while a turn streams
+ *        "󰧑 Thought · 4s ▸" once it ends (or "Thought · a few seconds" for short ones)
+ *        "󰧑 Thought ▸" for pre-extension historical blocks (duration unknown)
  *
  * MECHANISM (v4). pi's AssistantMessageComponent declares `hiddenThinkingLabel`
  * as a CLASS FIELD — under define-semantics the engine creates an own property
@@ -21,6 +21,12 @@
  *   4. on agent_start, freeze still-unfrozen (historical) instances to plain
  *      "Thought" — honest label, unknown duration; never stamped with another
  *      turn's number
+ *   5. WAVE (v4.3): while an instance is streaming with thinking-only content,
+ *      a timer invalidates it (~130ms) so pi re-bakes the label, and the
+ *      accessor emits per-char ANSI (faint → normal → bold crest) — a shimmer
+ *      sweeping "Thinking...". Only the collapse glyph "▸" stays static. The
+ *      TUI reference for requestRender is captured from
+ *      InteractiveMode.prototype.mountInteractiveTui.
  *
  * Timing approximation: thinking phase ≈ first provider roundtrip of the turn
  * (before_provider_request → after_provider_response). With `max` thinking on
@@ -35,13 +41,15 @@
  *   { "tier": "nerd" | "unicode" | "ascii",   ← default "nerd" (md-brain 󰧑)
  *     "nerdGlyph": "<swap NF glyph, e.g. md-thought_bubble 󰟶>",
  *     "briefMaxS": 4, "briefText": "a few seconds",
+ *     "wave": true, "waveMs": 130,
  *     "disabled": false }
  *   Stock (non-NF) machines: { "tier": "unicode" } → big ☕ via system emoji.
+ *   Wave uses standard SGR faint/bold — degrades to plain text if unsupported.
  *
  * Toggle in-session: /thought-label (prints patch/tracking diagnostics)
  */
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
-import { AssistantMessageComponent } from "@earendil-works/pi-coding-agent";
+import { AssistantMessageComponent, InteractiveMode } from "@earendil-works/pi-coding-agent";
 import { loadTierConfig, resolveTierGlyph } from "../../lib/tier-glyphs.ts";
 import { homedir } from "node:os";
 import { join } from "node:path";
@@ -49,6 +57,8 @@ import { join } from "node:path";
 interface ThoughtLabelConfig {
 	briefMaxS?: number;
 	briefText?: string;
+	wave?: boolean;
+	waveMs?: number;
 }
 
 const CONFIG_PATH = join(homedir(), ".pi", "agent", "thought-label.json");
@@ -63,7 +73,7 @@ function fmtDuration(seconds: number, briefMaxS: number, briefText: string): str
 
 export default function (pi: ExtensionAPI) {
 	const cfg = loadTierConfig<ThoughtLabelConfig & { tier?: "unicode" | "nerd" | "ascii"; nerdGlyph?: string; disabled?: boolean }>(
-		join(homedir(), ".pi", "agent", "thought-label.json"),
+		CONFIG_PATH,
 	);
 	let enabled = cfg.disabled !== true;
 	// Nerd-first defaults: md-brain 󰧑 (U+F09D1). Stock (non-NF) machines set
@@ -72,11 +82,16 @@ export default function (pi: ExtensionAPI) {
 	const prefix = resolveTierGlyph(tierCfg, { unicode: "\u2615" }) + (tierCfg.tier === "ascii" ? "" : " ");
 	const briefMaxS = cfg.briefMaxS ?? 4;
 	const briefText = cfg.briefText ?? "a few seconds";
+	const waveEnabled = cfg.wave !== false;
+	const waveMs = Math.max(60, cfg.waveMs ?? 130);
 
 	let installed = false;
 	let installNote = "";
 	const tracked = new Set<any>();
 	let origUpdate: ((this: any, message: unknown, isStreaming?: boolean) => void) | null = null;
+	let tuiRef: { requestRender: (force?: boolean) => void } | null = null;
+	let waveTimer: ReturnType<typeof setInterval> | null = null;
+	let wavePhase = 0;
 
 	// Current turn timing state. respMs = first provider roundtrip of the turn
 	// (the thinking phase, at least for think-then-act models at high effort).
@@ -93,6 +108,24 @@ export default function (pi: ExtensionAPI) {
 		// false the moment the component is constructed for a non-streaming
 		// message. Duration unknown until agent_end freezes turn instances.
 		if (!inst.isStreaming) return `${prefix}Thought ▸`;
+		// Streaming: shimmer the text, keep the trailing collapse glyph static.
+		if (waveEnabled && tuiRef) {
+			const m = raw.match(/^(.*?\S)(\s*▸\s*)$/s);
+			const animatePart = m ? m[1] : raw;
+			const suffix = m ? m[2] : "";
+			return (
+				prefix +
+				[...animatePart]
+					.map((ch, i) => {
+						const lvl = Math.sin(i * 0.9 - wavePhase * 1.1);
+						if (lvl > 0.5) return `\x1b[1m${ch}\x1b[22m`; // bold crest
+						if (lvl < -0.5) return `\x1b[2m${ch}\x1b[22m`; // faint trough
+						return ch;
+					})
+					.join("") +
+				suffix
+			);
+		}
 		return prefix + raw;
 	}
 
@@ -111,6 +144,60 @@ export default function (pi: ExtensionAPI) {
 			},
 		});
 		inst.__tlRaw = current;
+	}
+
+	function captureTui(): void {
+		try {
+			const proto = (InteractiveMode as any).prototype;
+			if (!proto || typeof proto.mountInteractiveTui !== "function") return;
+			if ((proto.mountInteractiveTui as any).__thoughtLabelCapture) return;
+			const orig = proto.mountInteractiveTui;
+			const wrapped = function (this: any, tui: any, components: unknown[]) {
+				if (!tuiRef && tui && typeof tui.requestRender === "function") tuiRef = tui;
+				return orig.call(this, tui, components);
+			} as any;
+			wrapped.__thoughtLabelCapture = true;
+			proto.mountInteractiveTui = wrapped;
+		} catch {
+			/* capture is best-effort; wave simply stays off without a tui ref */
+		}
+	}
+
+	function thinkingOnly(inst: any): boolean {
+		const content = inst.lastMessage?.content;
+		return Array.isArray(content) && content.length > 0 && content.every((b: any) => b?.type === "thinking");
+	}
+
+	function waveTick(): void {
+		if (!turnActive || !tuiRef) return;
+		wavePhase++;
+		try {
+			for (const inst of tracked) {
+				// Only invalidate thinking-only streaming instances: the rebuild is
+				// cheap there and the label is the only visible child. Once text
+				// starts streaming, freeze the shimmer (markdown rebuilds are heavy).
+				if (inst.isStreaming && thinkingOnly(inst)) inst.invalidate();
+			}
+			tuiRef.requestRender();
+		} catch {
+			/* animation is cosmetic; never break the session */
+		}
+	}
+
+	function startWave(): void {
+		if (waveTimer || !waveEnabled || !waveEnabledNow()) return;
+		waveTimer = setInterval(waveTick, waveMs);
+	}
+
+	function waveEnabledNow(): boolean {
+		return enabled && waveEnabled;
+	}
+
+	function stopWave(): void {
+		if (waveTimer) {
+			clearInterval(waveTimer);
+			waveTimer = null;
+		}
 	}
 
 	function install(): boolean {
@@ -138,6 +225,7 @@ export default function (pi: ExtensionAPI) {
 			wrapped.__thoughtLabelPatch = true; // reload idempotency marker
 			proto.updateContent = wrapped;
 			origUpdate = orig;
+			captureTui();
 			return true;
 		} catch (error) {
 			installNote = `thought-label: install failed (${error instanceof Error ? error.message : String(error)}) — disabled`;
@@ -178,6 +266,7 @@ export default function (pi: ExtensionAPI) {
 		for (const inst of tracked) {
 			if (!inst.__tlFrozen) inst.__tlFrozen = "Thought ▸";
 		}
+		startWave();
 	});
 
 	pi.on("before_provider_request", () => {
@@ -190,6 +279,7 @@ export default function (pi: ExtensionAPI) {
 
 	pi.on("agent_end", () => {
 		turnActive = false;
+		stopWave();
 		const now = Date.now();
 		const seconds =
 			reqStartMs !== null && respEndMs !== null
@@ -217,9 +307,10 @@ export default function (pi: ExtensionAPI) {
 			if (!installed) {
 				installed = install();
 			}
+			if (!enabled) stopWave();
 			const trackedCount = tracked.size;
 			ctx.ui.notify(
-				`thought-label ${enabled ? "enabled" : "disabled"} · patched:${installed} · tracked:${trackedCount} · lastDur:${lastDurText ?? "—"}`,
+				`thought-label ${enabled ? "enabled" : "disabled"} · patched:${installed} · tracked:${trackedCount} · lastDur:${lastDurText ?? "—"} · wave:${waveEnabled && tuiRef ? "on" : "off"}`,
 				"info",
 			);
 			if (enabled) reRenderTracked();
