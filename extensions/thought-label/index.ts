@@ -147,7 +147,11 @@ export default function (pi: ExtensionAPI) {
 			if (!installed) {
 				installed = install();
 			}
-			ctx.ui.notify(`thought-label ${enabled ? "enabled" : "disabled"}`, "info");
+			const trackedCount = tracked.size;
+			ctx.ui.notify(
+				`thought-label ${enabled ? "enabled" : "disabled"} · patched:${installed} · tracked:${trackedCount} · lastDur:${lastDurText ?? "—"}`,
+				"info",
+			);
 		},
 	});
 }
