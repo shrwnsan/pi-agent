@@ -47,13 +47,14 @@ import type {
 } from "@earendil-works/pi-coding-agent";
 import {
 	createBashToolDefinition,
+	createEditToolDefinition,
 	createFindToolDefinition,
 	createGrepToolDefinition,
 	createLsToolDefinition,
 	createReadToolDefinition,
 	createWriteToolDefinition,
 } from "@earendil-works/pi-coding-agent";
-import { Text, truncateToWidth, type Component, type TuiMouseEvent } from "@earendil-works/pi-tui";
+import { Box, Text, truncateToWidth, type Component, type TuiMouseEvent } from "@earendil-works/pi-tui";
 import { loadConfig, resolveGlyphs, type GlyphSet, type MinimalModeConfig } from "./glyphs.ts";
 
 const PREVIEW_LINES = 5;
@@ -212,6 +213,7 @@ export default function minimalMode(pi: ExtensionAPI) {
 		clock: ToolClock,
 		runningSummary: string,
 		toolName: string,
+		selfShell = false,
 	): Component {
 		if (context.expanded) {
 			const component = instrument(`${toolName}:call-expanded`, () =>
@@ -233,6 +235,13 @@ export default function minimalMode(pi: ExtensionAPI) {
 						const startedAt = clock.starts.get(toolCallId);
 						if (startedAt !== undefined) {
 							const line = rowLine(theme, glyphs, glyphs.running, true, runningSummary, glyphs.collapsed, statusColor);
+							// Self-shell tools (edit) render outside pi's contentBox — wrap
+							// their collapsed rows in the same padded background box.
+							if (selfShell) {
+								const box = new Box(1, 1, (t: string) => theme.bg("toolPendingBg", t));
+								box.addChild(new Text(truncateToWidth(line, width), 0, 0));
+								return box.render(width);
+							}
 							return [truncateToWidth(line, width)];
 						}
 						return callComponent.render(width); // not started → built-in header
@@ -364,15 +373,17 @@ export default function minimalMode(pi: ExtensionAPI) {
 		});
 	}
 
-	// --- read/write: `○ read src/foo.ts ▸` → `✓ read src/foo.ts ▸`
-	// (edit is intentionally NOT re-registered: it is renderShell:"self" with
-	// native diff-preview renderers in pi — collapsing it to a one-liner loses
-	// the diff. Stock presentation wins for edit.)
+	// --- read/write/edit: `○ edit src/foo.ts ▸` → `✓ edit src/foo.ts ▸`
+	// edit is renderShell:"self" in pi (native live-diff renderer, own boxes) —
+	// collapsed we substitute the boxed one-liner; expanded delegates to the
+	// native renderer (full diff), so click-to-expand still shows the diff.
 	for (const [toolName, create] of [
 		["read", createReadToolDefinition],
 		["write", createWriteToolDefinition],
+		["edit", createEditToolDefinition],
 	] as const) {
 		const orig = create(process.cwd()) as ToolDefinition<any, any, any>;
+		const selfShell = (orig as { renderShell?: string }).renderShell === "self";
 		const clock = newClock();
 		pi.registerTool({
 			...orig,
@@ -387,7 +398,7 @@ export default function minimalMode(pi: ExtensionAPI) {
 				const a = (args ?? {}) as Record<string, unknown>;
 				const summary =
 					typeof a.path === "string" ? `${toolName} ${truncateMiddle(tildePath(a.path), 40)}` : toolName;
-				return liveCallHeader(orig.renderCall?.bind(orig), args, theme, context, clock, summary, toolName);
+				return liveCallHeader(orig.renderCall?.bind(orig), args, theme, context, clock, summary, toolName, selfShell);
 			},
 			renderResult(result, options, theme, context) {
 				debugCall(`${toolName}:renderResult${options.expanded ? "+x" : options.isPartial ? "+p" : ""}`);
@@ -405,10 +416,13 @@ export default function minimalMode(pi: ExtensionAPI) {
 				const a = (context as { args?: Record<string, unknown> }).args ?? {};
 				const path = typeof a.path === "string" ? truncateMiddle(tildePath(a.path), 40) : "";
 				const summary = `${toolName} ${path}`.trim();
-				return withClickDebounce(
-					new Text(rowLine(theme, glyphs, glyphs.check, context.isError !== true, summary, glyphs.collapsed, statusColor), 0, 0),
-					context.toolCallId,
-				);
+				const one = new Text(rowLine(theme, glyphs, glyphs.check, context.isError !== true, summary, glyphs.collapsed, statusColor), 0, 0);
+				if (selfShell) {
+					const box = new Box(1, 1, (t: string) => theme.bg("toolPendingBg", t));
+					box.addChild(one);
+					return withClickDebounce(box, context.toolCallId);
+				}
+				return withClickDebounce(one, context.toolCallId);
 			},
 		});
 	}

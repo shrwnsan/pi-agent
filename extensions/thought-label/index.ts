@@ -124,9 +124,8 @@ export default function (pi: ExtensionAPI) {
 				const m = raw.match(/^(.*?\S)(\s*▸\s*)$/s);
 				const animatePart = prefix + (m ? m[1] : raw);
 				const suffix = m ? m[2] : "";
-				// Leading SGR 23 cancels pi's outer italic on the baked label.
 				return (
-					"\x1b[23m" +
+					"" +
 					[...animatePart]
 						.map((ch, i) => {
 							// Faint troughs travelling through otherwise-normal chars.
@@ -138,9 +137,35 @@ export default function (pi: ExtensionAPI) {
 			} else {
 				label = prefix + raw;
 			}
-			return `\x1b[23m${prefix}${label}`;
+			return `${prefix}${label}`;
 		}
-		return `\x1b[23m${prefix}${label}`;
+		return `${prefix}${label}`;
+	}
+
+	/**
+	 * Post-bake italic strip. pi bakes the label via chalk.italic(chalk.fg(label)),
+	 * and chalk REWRITES any [23m inside our string back to [3m (applyStyle's
+	 * re-open logic) — cancelling italic in-string is impossible. Instead we patch
+	 * the FINAL bytes of the baked Text node: drop [3m and [23m.
+	 */
+	function stripItalics(inst: any): void {
+		try {
+			const cc = inst.contentContainer;
+			const stack: any[] = [...(cc?.children ?? [])];
+			while (stack.length) {
+				const node = stack.shift();
+				if (!node) continue;
+				if (typeof node.text === "string" && /\x1b\[3m[\s\S]*(?:thought|thinking)/i.test(node.text)) {
+					const cleaned = node.text.replace(/\x1b\[3m/g, "").replace(/\x1b\[23m/g, "");
+					if (cleaned !== node.text) node.setText(cleaned);
+					return; // label found and cleaned
+				}
+				if (node.child) stack.push(node.child);
+				if (node.children) stack.push(...node.children);
+			}
+		} catch {
+			/* cosmetic only */
+		}
 	}
 
 	/** Swap one instance's own data property for an own accessor we control. */
@@ -236,6 +261,7 @@ export default function (pi: ExtensionAPI) {
 				}
 				const res = orig.call(this, message, isStreaming);
 				try {
+					stripItalics(this);
 					// Historical block with a reconstructed duration: freeze + re-bake
 					// once (the first bake happened before the freeze was known).
 					if (enabled && !this.__tlFrozen && this.lastMessage) {
@@ -243,6 +269,7 @@ export default function (pi: ExtensionAPI) {
 						if (hist) {
 							this.__tlFrozen = hist;
 							orig.call(this, this.lastMessage);
+							stripItalics(this);
 						}
 					}
 				} catch {
@@ -265,7 +292,10 @@ export default function (pi: ExtensionAPI) {
 		if (!origUpdate) return;
 		for (const inst of tracked) {
 			try {
-				if (inst.lastMessage) origUpdate.call(inst, inst.lastMessage);
+				if (inst.lastMessage) {
+					origUpdate.call(inst, inst.lastMessage);
+					stripItalics(inst);
+				}
 			} catch {
 				/* component may be disposed; ignore */
 			}
@@ -281,6 +311,11 @@ export default function (pi: ExtensionAPI) {
 
 	pi.on("session_start", async (_event, ctx) => {
 		if (!installed) installed = install();
+		// Startup-rendered blocks were baked before reconstruction landed; one
+		// deferred sweep re-strips them (setText clears their render cache).
+		setTimeout(() => {
+			for (const inst of tracked) stripItalics(inst);
+		}, 0);
 		// Reconstruct historical thinking durations from session-entry timestamps.
 		try {
 			const branch = (ctx as any).sessionManager?.getBranch?.() ?? [];
@@ -307,7 +342,17 @@ export default function (pi: ExtensionAPI) {
 		// Everything still unfrozen predates this turn — but if it has a
 		// reconstructed duration from the session file, keep that instead.
 		for (const inst of tracked) {
-			if (!inst.__tlFrozen && !histDur.has(inst.lastMessage)) inst.__tlFrozen = "thought ▸";
+			if (!inst.__tlFrozen && !histDur.has(inst.lastMessage)) {
+				inst.__tlFrozen = "thought ▸";
+				try {
+					if (inst.lastMessage && origUpdate) {
+						origUpdate.call(inst, inst.lastMessage);
+						stripItalics(inst);
+					}
+				} catch {
+					/* cosmetic only */
+				}
+			}
 		}
 		startWave();
 	});
