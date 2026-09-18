@@ -3,6 +3,7 @@
  *
  * Want:  "☕︎ Thinking...  ▸" while a turn streams
  *        "☕︎ Thought · 4s  ▸" once it ends (or "Thought · a few seconds" for short ones)
+ *        "☕︎ Thought  ▸" for pre-extension historical blocks (duration unknown)
  *
  * MECHANISM (v4). pi's AssistantMessageComponent declares `hiddenThinkingLabel`
  * as a CLASS FIELD — under define-semantics the engine creates an own property
@@ -15,8 +16,11 @@
  *   2. on first call per instance, replace the instance's own data property with
  *      an own accessor (get: live label, set: raw store) — own accessors shadow
  *      the data property, and the render inside updateContent reads through it
- *   3. on agent_end, freeze each tracked instance's label to "Thought · Xs" with
- *      that turn's duration and re-run updateContent to re-bake
+ *   3. on agent_end, freeze instances created during the turn to "Thought · Xs"
+ *      with that turn's duration and re-run updateContent to re-bake
+ *   4. on agent_start, freeze still-unfrozen (historical) instances to plain
+ *      "Thought" — honest label, unknown duration; never stamped with another
+ *      turn's number
  *
  * Timing approximation: thinking phase ≈ first provider roundtrip of the turn
  * (before_provider_request → after_provider_response). With `max` thinking on
@@ -61,7 +65,9 @@ export default function (pi: ExtensionAPI) {
 		join(homedir(), ".pi", "agent", "thought-label.json"),
 	);
 	let enabled = cfg.disabled !== true;
-	const prefix = resolveTierGlyph(cfg, { unicode: "\u2615\uFE0E" }); // ☕︎ text presentation
+	// No variation selector (U+FE0E): default to emoji presentation — the big,
+	// colored ☕ — instead of the thin text-presentation glyph.
+	const prefix = resolveTierGlyph(cfg, { unicode: "\u2615" }) + (cfg.tier === "ascii" ? "" : " ");
 	const briefMaxS = cfg.briefMaxS ?? 4;
 	const briefText = cfg.briefText ?? "a few seconds";
 
@@ -78,11 +84,12 @@ export default function (pi: ExtensionAPI) {
 	let lastDurText: string | null = null;
 
 	function liveLabel(inst: any): string {
-		if (!enabled) return inst.__tlRaw ?? "Thinking...";
+		const raw = inst.__tlRaw ?? "Thinking...";
+		if (!enabled) return raw;
 		if (inst.__tlFrozen) return prefix + inst.__tlFrozen;
-		if (turnActive) return prefix + (inst.__tlRaw ?? "Thinking...");
-		if (lastDurText) return `${prefix}Thought · ${lastDurText}`;
-		return prefix + (inst.__tlRaw ?? "Thinking...");
+		if (turnActive) return prefix + raw;
+		if (lastDurText) return `${prefix}Thought · ${lastDurText} ▸`;
+		return prefix + raw;
 	}
 
 	/** Swap one instance's own data property for an own accessor we control. */
@@ -154,6 +161,12 @@ export default function (pi: ExtensionAPI) {
 		turnActive = true;
 		reqStartMs = null;
 		respEndMs = null;
+		// Everything still unfrozen predates this turn (session history, earlier
+		// turns rendered before the extension loaded). Freeze them to a duration-
+		// less "Thought" so agent_end never stamps them with this turn's number.
+		for (const inst of tracked) {
+			if (!inst.__tlFrozen) inst.__tlFrozen = "Thought ▸";
+		}
 	});
 
 	pi.on("before_provider_request", () => {
@@ -175,7 +188,7 @@ export default function (pi: ExtensionAPI) {
 					: null;
 		lastDurText = seconds !== null ? fmtDuration(seconds, briefMaxS, briefText) : null;
 		if (!enabled || !lastDurText) return;
-		const label = `Thought · ${lastDurText}`;
+		const label = `Thought · ${lastDurText} ▸`;
 		for (const inst of tracked) {
 			if (!inst.__tlFrozen) {
 				inst.__tlFrozen = label;

@@ -1,14 +1,17 @@
 /**
  * tps — per-run telemetry notification, footer-dialect edition.
  *
- *   󱐌24.2tps ↑104k ↓864 Σ110k R4.2M W0.0 H99.8% · 35.7s   (R/W/H omitted when no cache)
- *   ⚡︎24.2tps ↑104k ↓864 Σ110k · 35.7s                    (unicode tier, no cache)
+ *   󱐌21.4tps ↑193k ↓955 Σ194k R256 W0.0 H0.1% · 44.6s · 14:23      (UTC; same UTC day as session start)
+ *   ⚡︎21.4tps ↑193k ↓955 Σ194k R256 W0.0 H0.1% · 44.6s · 09-19 02:14  (UTC day rolled over mid-session)
  *
  * Glyph tiers via lib/tier-glyphs.ts (unicode default, nerd via config, ascii).
  * ↑ input · ↓ output · Σ total · R cache-read · W cache-write · H cache-hit %
  * (H uses the footer's own formula: cacheRead / (input + cacheRead + cacheWrite)).
  * Zero-valued token counts render as "0.0" — measured-float-zero, not absent.
- * Cumulative context/caching stays the footer's job — this line is per-run.
+ * Final segment: turn-finish wall clock in UTC; grows a MM-DD prefix when the
+ * finished turn's UTC day differs from the session's anchor day (session_start,
+ * so /reload and resume re-anchor). Cumulative context/caching stays the
+ * footer's job — this line is per-run.
  *
  * Config (~/.pi/agent/tps.json, all optional):
  *   { "tier": "unicode" | "nerd" | "ascii", "nerdGlyph": "󱐌",
@@ -47,6 +50,20 @@ export default function (pi: ExtensionAPI) {
 	let agentStartMs: number | null = null;
 	const glyph = resolveTierGlyph(cfg, { unicode: "\u26A1\uFE0E" }); // ⚡︎ text presentation
 	const showTotal = cfg.showTotal !== false;
+	// UTC day anchor: set at session_start (/reload + resume re-anchor). When the
+	// finished turn's UTC day differs, the timestamp grows a MM-DD prefix.
+	let anchorDayUtc: string | null = null;
+
+	const utcDayKey = (d: Date) =>
+		`${String(d.getUTCFullYear()).slice(2)}-${String(d.getUTCMonth() + 1).padStart(2, "0")}-${String(d.getUTCDate()).padStart(2, "0")}`;
+	const utcStamp = (d: Date, withDate: boolean) => {
+		const hm = `${String(d.getUTCHours()).padStart(2, "0")}:${String(d.getUTCMinutes()).padStart(2, "0")}`;
+		return withDate ? `${String(d.getUTCMonth() + 1).padStart(2, "0")}-${String(d.getUTCDate()).padStart(2, "0")} ${hm}` : hm;
+	};
+
+	pi.on("session_start", () => {
+		anchorDayUtc = utcDayKey(new Date());
+	});
 
 	pi.registerCommand("tps", {
 		description: "Toggle TPS performance notifications",
@@ -102,6 +119,8 @@ export default function (pi: ExtensionAPI) {
 			}
 		}
 		parts.push(`· ${elapsedSeconds.toFixed(1)}s`);
+		const now = new Date();
+		parts.push(`· ${utcStamp(now, anchorDayUtc !== null && utcDayKey(now) !== anchorDayUtc)}`);
 
 		ctx.ui.notify(parts.join(" "), "info");
 	});
