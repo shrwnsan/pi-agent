@@ -87,8 +87,10 @@ export default function (pi: ExtensionAPI) {
 		const raw = inst.__tlRaw ?? "Thinking...";
 		if (!enabled) return raw;
 		if (inst.__tlFrozen) return prefix + inst.__tlFrozen;
-		if (turnActive) return prefix + raw;
-		if (lastDurText) return `${prefix}Thought · ${lastDurText} ▸`;
+		// Completed message (history, or a finished round mid-turn): isStreaming is
+		// false the moment the component is constructed for a non-streaming
+		// message. Duration unknown until agent_end freezes turn instances.
+		if (!inst.isStreaming) return `${prefix}Thought ▸`;
 		return prefix + raw;
 	}
 
@@ -197,7 +199,9 @@ export default function (pi: ExtensionAPI) {
 		if (!enabled || !lastDurText) return;
 		const label = `Thought · ${lastDurText} ▸`;
 		for (const inst of tracked) {
-			if (!inst.__tlFrozen) {
+			// Only instances born during this turn earn the duration; historical
+			// ones were frozen to duration-less "Thought ▸" at agent_start.
+			if (!inst.isStreaming && !inst.__tlFrozen) {
 				inst.__tlFrozen = label;
 			}
 		}
