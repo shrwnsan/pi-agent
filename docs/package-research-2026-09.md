@@ -359,3 +359,47 @@ On every version bump: re-run the §9.1 greps (fetch/telemetry/endpoints), read
 the changelog for new exec surfaces or config keys, confirm findings 1–2's
 config keys still hold. Documented ~30-minute job; skip only for patch bumps
 with boring changelogs.
+
+### 10.5 Phase 2.5 — QoL polish (own-repo extensions)
+
+**tps v2 — footer-dialect telemetry line.** Current output is verbose and
+label-heavy:
+
+```
+TPS 24.2 tok/s. out 864, in 103,783, cache r/w 0/0, total 104,647, 35.7s
+```
+
+Target: match the built-in footer's glyph dialect (`↑468k ↓58k R4.2M CH99.8%`),
+per-run:
+
+```
+⚡24.2 ↑104k ↓864 R4.2M W0 · 35.7s     (cache segments omitted when 0/0)
+⚡24.2 ↑104k ↓864 · 35.7s
+```
+
+- ⚡ = output tok/s (the headline); ↑ input, ↓ output, R cache-read, W
+  cache-write; humanized k/M; separators dim via theme.fg; total dropped
+  (redundant — in+out, and the footer owns cumulative context).
+- Verify footer arrow semantics from FooterDataProvider before matching.
+- ~30-line change in `extensions/tps.ts`; keep `/tps` toggle.
+
+**thinking-label — upstream-first.** Want: `☕︎ Thinking... ▸` while streaming,
+`☕︎ Thought · 4s ▸` (or "a few seconds") when done. Findings from pi 0.85.1
+dist:
+
+- The plumbing half-exists: `InteractiveMode.setHiddenThinkingLabel(label)`
+  propagates to every `AssistantMessageComponent` — but **nothing calls it with
+  a label** (only resets to default), there is no settings key, and
+  `docs/extensions.md` exposes no message-renderer override. Extensions cannot
+  reach this cleanly.
+- Plan: small upstream issue/PR to pi-mono — (a) settings keys
+  `thinkingLabel`/`thoughtLabel` (+ optional glyph), (b) past-tense state: swap
+  label when the streaming message produces its first non-thinking content or
+  completes, computing duration from stream start. Contained; the setter chain
+  is the PR's backbone.
+- Interim: a version-pinned monkey-patch extension is possible but fragile and
+  against the repo's small-and-robust ethos — only as an explicitly opt-in
+  experiment if requested.
+
+Renumber note: Phase 3 (dormant foreman) stays last; QoL slots as 2.5 between
+the btw audit and it.
