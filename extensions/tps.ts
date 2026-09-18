@@ -14,8 +14,10 @@
  * footer's job — this line is per-run.
  *
  * Config (~/.pi/agent/tps.json, all optional):
- *   { "tier": "unicode" | "nerd" | "ascii", "nerdGlyph": "󱐌",
+ *   { "tier": "nerd" | "unicode" | "ascii",   ← default "nerd" (󱐌)
+ *     "nerdGlyph": "<swap NF glyph, e.g. md-flash_outline 󰛕>",
  *     "showTotal": true, "disabled": false }
+ *   Stock (non-NF) machines: { "tier": "unicode" } → ⚡︎.
  *
  * Toggle in-session: /tps
  */
@@ -48,7 +50,10 @@ export default function (pi: ExtensionAPI) {
 	const cfg = loadTierConfig<TpsConfig & { tier?: "unicode" | "nerd" | "ascii"; nerdGlyph?: string; disabled?: boolean }>(CONFIG_PATH);
 	let tpsEnabled = cfg.disabled !== true;
 	let agentStartMs: number | null = null;
-	const glyph = resolveTierGlyph(cfg, { unicode: "\u26A1\uFE0E" }); // ⚡︎ text presentation
+	// Nerd-first defaults: 󱐌 flash (U+F140C). Stock machines set {"tier":
+	// "unicode"} locally → ⚡︎ via system emoji.
+	const tierCfg = { tier: "nerd" as "nerd" | "unicode" | "ascii", nerdGlyph: "󱐌", ...cfg };
+	const glyph = resolveTierGlyph(tierCfg, { unicode: "\u26A1\uFE0E" });
 	const showTotal = cfg.showTotal !== false;
 	// UTC day anchor: set at session_start (/reload + resume re-anchor). When the
 	// finished turn's UTC day differs, the timestamp grows a MM-DD prefix.

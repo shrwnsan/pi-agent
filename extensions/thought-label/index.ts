@@ -32,10 +32,11 @@
  * deal we signed for monkey-patching.
  *
  * Config (~/.pi/agent/thought-label.json, all optional):
- *   { "tier": "unicode" | "nerd" | "ascii",
- *     "nerdGlyph": "<paste NF brain glyph>",
+ *   { "tier": "nerd" | "unicode" | "ascii",   ← default "nerd" (md-brain 󰧑)
+ *     "nerdGlyph": "<swap NF glyph, e.g. md-thought_bubble 󰟶>",
  *     "briefMaxS": 4, "briefText": "a few seconds",
  *     "disabled": false }
+ *   Stock (non-NF) machines: { "tier": "unicode" } → big ☕ via system emoji.
  *
  * Toggle in-session: /thought-label (prints patch/tracking diagnostics)
  */
@@ -65,9 +66,10 @@ export default function (pi: ExtensionAPI) {
 		join(homedir(), ".pi", "agent", "thought-label.json"),
 	);
 	let enabled = cfg.disabled !== true;
-	// No variation selector (U+FE0E): default to emoji presentation — the big,
-	// colored ☕ — instead of the thin text-presentation glyph.
-	const prefix = resolveTierGlyph(cfg, { unicode: "\u2615" }) + (cfg.tier === "ascii" ? "" : " ");
+	// Nerd-first defaults: md-brain 󰧑 (U+F09D1). Stock (non-NF) machines set
+	// {"tier": "unicode"} locally → big ☕ via system emoji fonts. ASCII = bare.
+	const tierCfg = { tier: "nerd" as "nerd" | "unicode" | "ascii", nerdGlyph: "󰧑", ...cfg };
+	const prefix = resolveTierGlyph(tierCfg, { unicode: "\u2615" }) + (tierCfg.tier === "ascii" ? "" : " ");
 	const briefMaxS = cfg.briefMaxS ?? 4;
 	const briefText = cfg.briefText ?? "a few seconds";
 
