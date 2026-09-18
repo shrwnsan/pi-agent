@@ -30,9 +30,10 @@ pi-agent/
 | Extension | Description |
 |-----------|-------------|
 | `tilde-path` | Rewrites CWD in system prompt to use `~` notation |
-| `minimal-mode` | Adds collapsed status summaries (`✓ 1.2s · 132 lines ▸`, `✓ → 12 matches ▸`) on top of pi's built-in collapsible tool renderers. Configurable glyph tiers (unicode/nerd/ascii) via `~/.pi/agent/minimal-mode.json` |
+| `minimal-mode` | Adds collapsed status summaries (`✓ 1.2s · 132 lines ▸`, `✓ → 12 matches ▸`) on top of pi's built-in collapsible tool renderers. Configurable glyph tiers (unicode/nerd/ascii) via `~/.pi/agent/minimal-mode.json`. edit is exempt — its native live-diff renderer wins |
 | `footer-path` | Minimal footer: `[machine] repo · branch` — container/SSH/VM/WSL-aware, worktree-aware. Display styles configurable via `~/.pi/agent/footer-path.json`. Toggle with `/footer-path` |
-| `tps` | Notifies tokens/sec and usage stats after each agent run. Toggle with `/tps` |
+| `tps` | Per-run telemetry in footer dialect: `󱐌21.4tps ↑193k ↓955 Σ194k R256 W0.0 H0.1% · 44.6s · 14:23` — ↑↓Σ tokens, cache read/write/hit %, UTC finish stamp (MM-DD prefix after UTC midnight rollover). Glyph tiers via `~/.pi/agent/tps.json` (nerd default 󱐌, unicode ⚡︎). Toggle with `/tps` |
+| `thought-label` | Animated collapsed-thinking header: `󰧑 thinking… ▸` shimmer while streaming → `󰧑 thought · Xs ▸` with live-measured (turn) or session-file-reconstructed (history) durations. Uses a post-bake italic strip + `updateContent` prototype wrap — version-locked to pi 0.85.x, self-disables on seam changes. Config via `~/.pi/agent/thought-label.json` (tier/nerdGlyph/wave/waveMs). Toggle with `/thought-label` |
 | `answer` | Extracts questions from last assistant message and answers them interactively via `/answer` |
 | `pi-oauth-qwen` | ~~OAuth provider for Qwen models via device code flow with PKCE~~ **Suspended** — [Qwen's free OAuth tier ended April 15, 2026](https://github.com/QwenLM/qwen-code). Code preserved for potential future reactivation. |
 

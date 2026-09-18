@@ -406,16 +406,26 @@ dist:
 Renumber note: Phase 3 (dormant foreman) stays last; QoL slots as 2.5 between
 the btw audit and it.
 
-### 10.6 Phase 2.5 status (2026-09-17)
+### 10.6 Phase 2.5 status — ✅ SHIPPED & CONFIRMED (2026-09-18)
 
-- ✅ **tps v2** shipped — footer-dialect line (󱐌/⚡︎ tiers, ↑↓ Σ R W H),
-  zero-state `0.0`, shared `lib/tier-glyphs.ts` (also consumed by
-  thought-label; minimal-mode deliberately untouched). Commits `79187d8`,
-  `46dffcb`, `7729931`.
-- 🔄 **thought-label experiment** shipped — prototype-accessor patch on
-  `AssistantMessageComponent`, glyph prefix, per-turn frozen `Thought · Xs`,
-  capability-probed self-disable. Commits `79187d8`, `7729931`. In live test
-  after `/reload`.
-- ⏳ README extensions-table entries — parked until live-render sign-off.
-- ⏸ upstream thinking-label issue/PR — on hold per owner; interim patch is the
-  current vehicle. Revisit if the patch chafes or a pi upgrade breaks the seam.
+- ✅ **tps v2** — footer-dialect line (󱐌/⚡︎ tiers, ↑↓ Σ R W H%, zero-state
+  `0.0`, UTC finish stamp with MM-DD rollover), shared `lib/tier-glyphs.ts`
+  (also consumed by thought-label; minimal-mode deliberately untouched).
+- ✅ **thought-label** — confirmed live end-to-end: `󰧑 thinking… ▸` shimmer
+  (80ms ticks, 0.6 rad/tick sweep; faint-band wave, glyph included, no
+  italics/caps/emphasis) → `󰧑 thought · Xs ▸` (live-measured turns).
+  Historical durations RECONSTRUCTED from session-entry timestamps at
+  session_start (1h cap). v4.5 fix: strip detection matches ANSI-stripped
+  plain text — wave faint-marks split words with SGR codes, so raw-byte
+  matching silently skipped streaming frames.
+- ✅ **minimal-mode** — edit exempted from collapsing: pi's native
+  renderShell:"self" live-diff renderer wins (root-caused via
+  renderers/edit.js); read/write keep boxed one-liners.
+- README extensions-table entries added.
+- Key lessons baked into the code: chalk REWRITES close sequences inside
+  strings ([23m → [3m) — cancel-italic must be done post-bake on final bytes;
+  class fields defeat prototype accessors — patch methods, instrument
+  instances; wave runs only during thinking-only streaming (cheap rebuilds).
+- ⏸ upstream thinking-label issue/PR — on hold; interim patch is the vehicle.
+  Revisit if the patch chafes or a pi upgrade breaks the seam (the extension
+  self-disables and says so).
