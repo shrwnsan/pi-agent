@@ -4,14 +4,19 @@
  * Want:  "☕︎ Thinking...  ▸" while a turn streams
  *        "☕︎ Thought · 4s  ▸" once it ends (or "Thought · a few seconds" for short ones)
  *
- * HOW: pi exports AssistantMessageComponent; its collapsed thinking header renders
- * `${this.hiddenThinkingLabel}` at draw time, and the field is a plain property
- * assigned in the constructor. A prototype accessor therefore traps every
- * instance's label without touching instance internals:
- *   - set() captures instances + raw label ("Thinking...")
- *   - get() serves the glyph-prefixed live label, or a per-instance frozen
- *     "Thought · Xs" once its turn has ended (historical blocks keep their own
- *     turn's duration)
+ * MECHANISM (v4). pi's AssistantMessageComponent declares `hiddenThinkingLabel`
+ * as a CLASS FIELD — under define-semantics the engine creates an own property
+ * per instance, so prototype accessors/setters never see it (v3's approach was
+ * structurally dead). What IS patchable: the `updateContent` prototype method —
+ * it bakes the collapsed header from `this.hiddenThinkingLabel` on every call
+ * (each streaming delta, each expand/collapse click). So:
+ *
+ *   1. wrap `updateContent` once on the prototype (tagged for idempotent reload)
+ *   2. on first call per instance, replace the instance's own data property with
+ *      an own accessor (get: live label, set: raw store) — own accessors shadow
+ *      the data property, and the render inside updateContent reads through it
+ *   3. on agent_end, freeze each tracked instance's label to "Thought · Xs" with
+ *      that turn's duration and re-run updateContent to re-bake
  *
  * Timing approximation: thinking phase ≈ first provider roundtrip of the turn
  * (before_provider_request → after_provider_response). With `max` thinking on
@@ -28,7 +33,7 @@
  *     "briefMaxS": 4, "briefText": "a few seconds",
  *     "disabled": false }
  *
- * Toggle in-session: /thought-label
+ * Toggle in-session: /thought-label (prints patch/tracking diagnostics)
  */
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 import { AssistantMessageComponent } from "@earendil-works/pi-coding-agent";
@@ -41,6 +46,8 @@ interface ThoughtLabelConfig {
 	briefText?: string;
 }
 
+const CONFIG_PATH = join(homedir(), ".pi", "agent", "thought-label.json");
+
 function fmtDuration(seconds: number, briefMaxS: number, briefText: string): string {
 	if (seconds < briefMaxS) return briefText;
 	if (seconds < 60) return `${Math.round(seconds)}s`;
@@ -50,8 +57,9 @@ function fmtDuration(seconds: number, briefMaxS: number, briefText: string): str
 }
 
 export default function (pi: ExtensionAPI) {
-	const CONFIG_PATH = join(homedir(), ".pi", "agent", "thought-label.json");
-	const cfg = loadTierConfig<ThoughtLabelConfig & { tier?: "unicode" | "nerd" | "ascii"; nerdGlyph?: string; disabled?: boolean }>(CONFIG_PATH);
+	const cfg = loadTierConfig<ThoughtLabelConfig & { tier?: "unicode" | "nerd" | "ascii"; nerdGlyph?: string; disabled?: boolean }>(
+		join(homedir(), ".pi", "agent", "thought-label.json"),
+	);
 	let enabled = cfg.disabled !== true;
 	const prefix = resolveTierGlyph(cfg, { unicode: "\u2615\uFE0E" }); // ☕︎ text presentation
 	const briefMaxS = cfg.briefMaxS ?? 4;
@@ -59,8 +67,8 @@ export default function (pi: ExtensionAPI) {
 
 	let installed = false;
 	let installNote = "";
-	let replacedStale = false;
 	const tracked = new Set<any>();
+	let origUpdate: ((this: any, message: unknown, isStreaming?: boolean) => void) | null = null;
 
 	// Current turn timing state. respMs = first provider roundtrip of the turn
 	// (the thinking phase, at least for think-then-act models at high effort).
@@ -69,42 +77,56 @@ export default function (pi: ExtensionAPI) {
 	let respEndMs: number | null = null;
 	let lastDurText: string | null = null;
 
+	function liveLabel(inst: any): string {
+		if (!enabled) return inst.__tlRaw ?? "Thinking...";
+		if (inst.__tlFrozen) return prefix + inst.__tlFrozen;
+		if (turnActive) return prefix + (inst.__tlRaw ?? "Thinking...");
+		if (lastDurText) return `${prefix}Thought · ${lastDurText}`;
+		return prefix + (inst.__tlRaw ?? "Thinking...");
+	}
+
+	/** Swap one instance's own data property for an own accessor we control. */
+	function instrument(inst: any): void {
+		if (inst.__tlInstrumented) return;
+		inst.__tlInstrumented = true;
+		tracked.add(inst);
+		const desc = Object.getOwnPropertyDescriptor(inst, "hiddenThinkingLabel");
+		const current = desc && "value" in desc && typeof desc.value === "string" ? desc.value : "Thinking...";
+		Object.defineProperty(inst, "hiddenThinkingLabel", {
+			configurable: true,
+			get: () => liveLabel(inst),
+			set: (v: unknown) => {
+				inst.__tlRaw = typeof v === "string" ? v : "Thinking...";
+			},
+		});
+		inst.__tlRaw = current;
+	}
+
 	function install(): boolean {
 		try {
 			const proto = AssistantMessageComponent.prototype as any;
-			if (typeof proto.setHiddenThinkingLabel !== "function" || typeof proto.updateContent !== "function") {
-				installNote = "thought-label: AssistantMessageComponent seam missing — disabled";
+			if (typeof proto.updateContent !== "function") {
+				installNote = "thought-label: AssistantMessageComponent.updateContent missing — disabled";
 				return false;
 			}
-			const existing = Object.getOwnPropertyDescriptor(proto, "hiddenThinkingLabel");
-			if (existing) {
-				// Idempotent reload: our own tagged accessor from this generation.
-				if ((existing.get as any)?.__thoughtLabelPatch) return true;
-				// Stale accessor from a pre-fix generation of this extension — its
-				// closure died with the previous /reload, so its state is frozen
-				// garbage. Replace it. Bail only if it isn't replaceable.
-				if (!existing.configurable) {
-					installNote = "thought-label: hiddenThinkingLabel accessor is not replaceable — disabled";
-					return false;
+			if ((proto.updateContent as any).__thoughtLabelPatch) return true; // idempotent reload
+			// Cleanup: dead label accessor from v3 generations (shadowed by the
+			// class field; harmless but remove if replaceable).
+			const labelDesc = Object.getOwnPropertyDescriptor(proto, "hiddenThinkingLabel");
+			if (labelDesc?.configurable) delete proto.hiddenThinkingLabel;
+
+			const orig = proto.updateContent as (this: any, message: unknown, isStreaming?: boolean) => void;
+			const wrapped = function (this: any, message: unknown, isStreaming?: boolean) {
+				try {
+					instrument(this);
+				} catch {
+					/* never break rendering */
 				}
-				replacedStale = true;
-			}
-			const get = function (this: any) {
-				if (!enabled) return this.__tlRaw ?? "Thinking...";
-				if (this.__tlFrozen) return prefix + this.__tlFrozen;
-				if (turnActive) return prefix + (this.__tlRaw ?? "Thinking...");
-				if (lastDurText) return `${prefix}Thought · ${lastDurText}`;
-				return prefix + (this.__tlRaw ?? "Thinking...");
+				return orig.call(this, message, isStreaming);
 			} as any;
-			get.__thoughtLabelPatch = true; // reload idempotency marker
-			Object.defineProperty(proto, "hiddenThinkingLabel", {
-				configurable: true,
-				get,
-				set(this: any, v: string) {
-					this.__tlRaw = typeof v === "string" ? v : "Thinking...";
-					tracked.add(this);
-				},
-			});
+			wrapped.__thoughtLabelPatch = true; // reload idempotency marker
+			proto.updateContent = wrapped;
+			origUpdate = orig;
 			return true;
 		} catch (error) {
 			installNote = `thought-label: install failed (${error instanceof Error ? error.message : String(error)}) — disabled`;
@@ -112,19 +134,19 @@ export default function (pi: ExtensionAPI) {
 		}
 	}
 
-	function freezeCompletedTurns(): void {
-		if (!lastDurText) return;
-		const label = `Thought · ${lastDurText}`;
+	function reRenderTracked(): void {
+		if (!origUpdate) return;
 		for (const inst of tracked) {
-			if (!inst.__tlFrozen) inst.__tlFrozen = label;
+			try {
+				if (inst.lastMessage) origUpdate.call(inst, inst.lastMessage);
+			} catch {
+				/* component may be disposed; ignore */
+			}
 		}
 	}
 
 	pi.on("session_start", async (_event, ctx) => {
 		installed = install();
-		if (installed && replacedStale && ctx.hasUI) {
-			ctx.ui.notify("thought-label: replaced stale patch from earlier load", "info");
-		}
 		if (!installed && ctx.hasUI && installNote) ctx.ui.notify(installNote, "warning");
 	});
 
@@ -152,7 +174,14 @@ export default function (pi: ExtensionAPI) {
 					? (now - reqStartMs) / 1000
 					: null;
 		lastDurText = seconds !== null ? fmtDuration(seconds, briefMaxS, briefText) : null;
-		freezeCompletedTurns();
+		if (!enabled || !lastDurText) return;
+		const label = `Thought · ${lastDurText}`;
+		for (const inst of tracked) {
+			if (!inst.__tlFrozen) {
+				inst.__tlFrozen = label;
+			}
+		}
+		reRenderTracked();
 	});
 
 	pi.registerCommand("thought-label", {
@@ -167,6 +196,7 @@ export default function (pi: ExtensionAPI) {
 				`thought-label ${enabled ? "enabled" : "disabled"} · patched:${installed} · tracked:${trackedCount} · lastDur:${lastDurText ?? "—"}`,
 				"info",
 			);
+			if (enabled) reRenderTracked();
 		},
 	});
 }
