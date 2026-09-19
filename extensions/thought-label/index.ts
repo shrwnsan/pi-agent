@@ -22,8 +22,8 @@
  *      "Thought" — honest label, unknown duration; never stamped with another
  *      turn's number
  *   5. WAVE (v4.3): while an instance is streaming with thinking-only content,
- *      a timer invalidates it (~130ms) so pi re-bakes the label, and the
- *      accessor emits per-char ANSI (faint → normal → bold crest) — a shimmer
+ *      an 80ms timer invalidates it so pi re-bakes the label, and the
+ *      accessor emits per-char ANSI (faint-band, no bold crest) — a shimmer
  *      sweeping "Thinking...". Only the collapse glyph "▸" stays static. The
  *      TUI reference for requestRender is captured from
  *      InteractiveMode.prototype.mountInteractiveTui.
@@ -103,6 +103,7 @@ export default function (pi: ExtensionAPI) {
 		return gt.__thoughtLabelTui ?? null;
 	}
 	let waveTimer: ReturnType<typeof setInterval> | null = null;
+	let waveStartedAt = 0;
 	let wavePhase = 0;
 
 	// Current turn timing state. respMs = first provider roundtrip of the turn
@@ -219,15 +220,27 @@ export default function (pi: ExtensionAPI) {
 	function waveTick(): void {
 		const tui = getTui();
 		if (!turnActive || !tui) return;
+		// Self-reap: a /reload mid-turn orphans this generation's interval (its
+		// agent_end handler is gone). Any real turn ends long before this cap.
+		if (Date.now() - waveStartedAt > 30 * 60_000) {
+			stopWave();
+			return;
+		}
 		wavePhase += 0.6;
 		try {
+			let touched = 0;
 			for (const inst of tracked) {
 				// Only invalidate thinking-only streaming instances: the rebuild is
 				// cheap there and the label is the only visible child. Once text
 				// starts streaming, freeze the shimmer (markdown rebuilds are heavy).
-				if (inst.isStreaming && thinkingOnly(inst)) inst.invalidate();
+				if (inst.isStreaming && thinkingOnly(inst)) {
+					inst.invalidate();
+					touched++;
+				}
 			}
-			tui.requestRender();
+			// Skip the frame when nothing qualified — no wasted renders on turns
+			// whose thinking phase already handed off to text.
+			if (touched > 0) tui.requestRender();
 		} catch {
 			/* animation is cosmetic; never break the session */
 		}
@@ -235,6 +248,7 @@ export default function (pi: ExtensionAPI) {
 
 	function startWave(): void {
 		if (waveTimer || !waveEnabled || !waveEnabledNow()) return;
+		waveStartedAt = Date.now();
 		waveTimer = setInterval(waveTick, waveMs);
 	}
 

@@ -429,3 +429,10 @@ the btw audit and it.
 - ⏸ upstream thinking-label issue/PR — on hold; interim patch is the vehicle.
   Revisit if the patch chafes or a pi upgrade breaks the seam (the extension
   self-disables and says so).
+- 🔎 **scout-verified** (first pi-subagents delegation, 2026-09-18): full
+  architecture map committed at `docs/thought-label-map.md` (entry chain,
+  tick/emitter/freeze flow, risk notes). Scout fixes applied: conditional
+  `requestRender` (no churn frames), 30-min orphaned-interval self-reap,
+  stale header comments corrected. Scout child cost: ~98K tokens total
+  (9 turns; 21.1k in / 5.7k out / 71.5k cache-read) — detached-children
+  usage is NOT rolled up by the parent cost summary (own session file).
