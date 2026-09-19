@@ -61,7 +61,7 @@ export default function (pi: ExtensionAPI) {
 						return (
 							this.borderColor(leftCap) +
 							this.borderColor(overflowLabel) +
-							this.borderColor("─".repeat(fill)) +
+							this.borderColor("─".repeat(fill) + " ") +
 							status +
 							this.borderColor(rightCap)
 						);
@@ -70,7 +70,7 @@ export default function (pi: ExtensionAPI) {
 						const fill = width - fixed;
 						return (
 							this.borderColor(leftCap) +
-							this.borderColor("─".repeat(fill)) +
+							this.borderColor("─".repeat(fill) + " ") +
 							status +
 							this.borderColor(rightCap)
 						);
