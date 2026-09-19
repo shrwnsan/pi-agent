@@ -46,7 +46,7 @@ export default function (pi: ExtensionAPI) {
 						return orig.call(this, width, hiddenLineCount);
 					}
 					const rightCap = " ──";
-					const leftCap = "── ";
+					const leftCap = "──";
 					let status = this.workingStatusIndicator.renderInBorder(Math.max(1, width - 5));
 					let statusWidth = visibleLen(status);
 					if (statusWidth === 0) return orig.call(this, width, hiddenLineCount);
