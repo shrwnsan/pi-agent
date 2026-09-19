@@ -424,6 +424,11 @@ the btw audit and it.
   renderShell:"self" live-diff renderer wins (root-caused via
   renderers/edit.js); read/write keep boxed one-liners.
 - README extensions-table entries added.
+- ✅ **status-align** (new, owner request 2026-09-18) — embedded `Working`
+  spinner right-aligned on the editor border (was left, visually crowded
+  during thinking). Separate extension from thought-label (different seam:
+  CustomEditor.renderTopBorder vs AssistantMessageComponent). Same
+  discipline: capability-probe, self-disable, /status-align toggle.
 - Key lessons baked into the code: chalk REWRITES close sequences inside
   strings ([23m → [3m) — cancel-italic must be done post-bake on final bytes;
   class fields defeat prototype accessors — patch methods, instrument
