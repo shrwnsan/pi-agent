@@ -436,6 +436,28 @@ the btw audit and it.
 - ⏸ upstream thinking-label issue/PR — on hold; interim patch is the vehicle.
   Revisit if the patch chafes or a pi upgrade breaks the seam (the extension
   self-disables and says so).
+- 🔎 **upstream recon (2026-09-19, owner request)**: no existing issue/PR covers
+  thinking-label customization, past-tense duration state, or animation
+  (searched open+closed). Adjacent: **#9765** (hidden thinking blocks render
+  stray blank lines with empty labels; `hideThinkingBlock: true`) — filed by
+  holny, AUTO-CLOSED by pi's new-contributor gate, pending daily maintainer
+  review; watch its resolution (hidden-label render changes would touch our
+  accessor). Key strategic finding: **`ctx.ui.setHiddenThinkingLabel()` is a
+  supported extension API** (minimal-mode already calls it), so an upstream PR
+  for the static label would likely be rejected under pi's "core is minimal"
+  philosophy — the extension API is the sanctioned path, and only per-instance
+  duration/animation state is genuinely missing upstream. CONTRIBUTING gate:
+  new contributors auto-closed; `lgtmi`/`lgtm` whitelisting via maintainer
+  replies; AI-assisted content allowed if reviewed. Filing remains owner's
+  call (owner's GitHub account).
+- 📊 **startup-perf investigation (2026-09-19)**: headless A/B/C with real
+  settings (max-thinking baseline isolated): floor 120ms; no-packages ~1.8s
+  (max-thinking model latency); **+pi-subagents → ~5.3s warm (+3.5–4s load,
+  101k lines TS exec + startup scans)**; full kit adds ~nothing; cold boots
+  +6s when `/tmp/jiti` (jiti transform cache, 1202 files) is wiped by tmp
+  cleaners/container restarts. No runaway processes. Options: accept /
+  per-project loading of pi-subagents / upstream perf report — owner call,
+  no action taken.
 - 🔎 **scout-verified** (first pi-subagents delegation, 2026-09-18): full
   architecture map committed at `docs/thought-label-map.md` (entry chain,
   tick/emitter/freeze flow, risk notes). Scout fixes applied: conditional
