@@ -1,11 +1,12 @@
 ---
 name: researcher-zai
-description: Autonomous web researcher — searches, evaluates, and synthesizes a focused research brief
+description: Autonomous web researcher — searches, evaluates, and synthesizes a focused research brief (search via Z.AI Coding Plan quota)
 tools: read, write, zai_web_search, fetch_content, get_search_content, source_check
 thinking: medium
 systemPromptMode: replace
 inheritProjectContext: true
 inheritSkills: false
+advertise: true
 output: research.md
 defaultProgress: true
 ---

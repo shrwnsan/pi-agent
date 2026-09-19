@@ -1,11 +1,12 @@
 ---
 name: evidence-auditor-zai
-description: Independent evidence reviewer for checking whether important research claims are supported by their sources
+description: Independent evidence reviewer for checking whether important research claims are supported by their sources (search via Z.AI Coding Plan quota)
 tools: read, zai_web_search, fetch_content, get_search_content, source_check
 thinking: high
 systemPromptMode: replace
 inheritProjectContext: true
 inheritSkills: false
+advertise: true
 ---
 
 > Hybrid build (shrwnsan): search runs on `zai_web_search` (Z.AI Coding Plan quota via the zai-search extension); fetch/verify legs use pi-web-access tools. Requires both providers registered.
