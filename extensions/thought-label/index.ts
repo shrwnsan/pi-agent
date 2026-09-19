@@ -22,7 +22,7 @@
  *      "Thought" — honest label, unknown duration; never stamped with another
  *      turn's number
  *   5. WAVE (v4.3): while an instance is streaming with thinking-only content,
- *      an 80ms timer invalidates it so pi re-bakes the label, and the
+ *      a 60ms timer invalidates it so pi re-bakes the label, and the
  *      accessor emits per-char ANSI (faint-band, no bold crest) — a shimmer
  *      sweeping "Thinking...". Only the collapse glyph "▸" stays static. The
  *      TUI reference for requestRender is captured from
@@ -41,7 +41,7 @@
  *   { "tier": "nerd" | "unicode" | "ascii",   ← default "nerd" (md-brain 󰧑)
  *     "nerdGlyph": "<swap NF glyph, e.g. md-thought_bubble 󰟶>",
  *     "briefMaxS": 4, "briefText": "a few seconds",
- *     "wave": true, "waveMs": 80,
+ *     "wave": true, "waveMs": 60,
  *     "disabled": false }
  *   Stock (non-NF) machines: { "tier": "unicode" } → big ☕ via system emoji.
  *   Wave uses standard SGR faint/bold — degrades to plain text if unsupported.
@@ -83,7 +83,7 @@ export default function (pi: ExtensionAPI) {
 	const briefMaxS = cfg.briefMaxS ?? 4;
 	const briefText = cfg.briefText ?? "a few seconds";
 	const waveEnabled = cfg.wave !== false;
-	const waveMs = Math.max(50, cfg.waveMs ?? 80);
+	const waveMs = Math.max(50, cfg.waveMs ?? 60);
 
 	let installed = false;
 	let installNote = "";
