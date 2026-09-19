@@ -330,16 +330,16 @@ Status legend: ⬜ pending · 🔄 in test · ✅ shipped · 💤 dormant.
 in `~/.pi/agent/settings.json`; apply hardening keys (`agentScope: "user"`,
 `scheduledRuns.enabled: false`); 2-week trial.
 
-**Phase 1 — this week.** ⬜ `zai-search` in this repo (`extensions/zai-search/`):
+**Phase 1 — this week.** ✅ `zai-search` in this repo (`extensions/zai-search/`):
 
 - 396 lines lifted from glm-tweaks `lib/zai-search.ts` (MIT), zero deps.
 - Registers `zai_web_search` via `pi.registerTool` — usable by parent **and**
   pi-subagents children (tools list must name it explicitly; children never
   inherit ambient tools).
-- Follow-up (v1.1): drop-in `researcher`/`evidence-auditor` agent markdown
-  variants that list `zai_web_search` in place of pi-web-access's four tools, so
-  those builtins work off Coding-Plan quota. Exact discovery mechanism verified
-  at build time (user config agents dir vs project).
+- v1.1 (pending Phase 0): drop-in `researcher`/`evidence-auditor` agent
+  markdown variants that list `zai_web_search` in place of pi-web-access's four
+  tools — build once pi-subagents is installed and its agent discovery format
+  is confirmed on-machine.
 - Security spec: single endpoint allowlist (`api.z.ai/api/mcp/...`), 45s
   timeout, key via standard pi auth resolution, no telemetry, no other egress.
 
