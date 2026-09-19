@@ -343,7 +343,7 @@ in `~/.pi/agent/settings.json`; apply hardening keys (`agentScope: "user"`,
 - Security spec: single endpoint allowlist (`api.z.ai/api/mcp/...`), 45s
   timeout, key via standard pi auth resolution, no telemetry, no other egress.
 
-**Phase 2 — this week, small.** ⬜ `/btw:inject` merge-path audit: confirm
+**Phase 2 — this week, small.** ✅ audit PASS (2026-09-18, source-level): merge-back uses only public APIs (`pi.sendUserMessage`, `deliverAs:"followUp"` when busy; queued user message, no direct context write); side session is `SessionManager.inMemory()`; only sanctioned `pi.appendEntry` writes. Prefer `/btw:summarize` for long threads. `/btw:inject` merge-path audit: confirm
 `sendUserMessage(..., { deliverAs: "followUp" })` lands as a queued user message
 (no direct context write), check nothing else writes session entries. Verdict
 recorded here; fallback is side-thread-only usage.
