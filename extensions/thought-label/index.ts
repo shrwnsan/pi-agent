@@ -335,6 +335,19 @@ export default function (pi: ExtensionAPI) {
 
 	pi.on("session_start", async (_event, ctx) => {
 		if (!installed) installed = install();
+		try {
+			// Supported-API belt (v4.6): set the lowercase base label through
+			// ctx.ui.setHiddenThinkingLabel so even edge-case components that miss
+			// our accessor still show it. Glyph prefix is added by the getter, so
+			// the raw stays glyph-free (no double-prefix). Per-instance wave and
+			// durations remain accessor-side.
+			const ui = (ctx as any).ui;
+			if (enabled && ui && typeof ui.setHiddenThinkingLabel === "function") {
+				ui.setHiddenThinkingLabel("thinking… ▸");
+			}
+		} catch {
+			/* cosmetic only */
+		}
 		// Startup-rendered blocks were baked before reconstruction landed; one
 		// deferred sweep re-strips them (setText clears their render cache).
 		setTimeout(() => {
