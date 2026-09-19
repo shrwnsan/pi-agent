@@ -47,6 +47,8 @@ pi-agent/
 
 Activate via pi settings: `"subagents": { "agentScanDirs": ["~/.pi/agent/git/github.com/shrwnsan/pi-agent/agents"] }` (auto-flowed on `pi update`).
 
+**Build mode**: keep the harness out of global settings and load it per-run — `alias pib='pi -e npm:pi-subagents -e npm:pi-btw -e npm:pi-web-access'` (~+0.2s warm; per-project `.pi/settings.json` works too). See `docs/package-research-2026-09.md` §11 for boot-cost measurements.
+
 ## Ideal State
 
 Additional directories to add as needed:

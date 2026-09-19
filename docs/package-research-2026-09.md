@@ -429,6 +429,10 @@ the btw audit and it.
   during thinking). Separate extension from thought-label (different seam:
   CustomEditor.renderTopBorder vs AssistantMessageComponent). Same
   discipline: capability-probe, self-disable, /status-align toggle.
+- ✅ **v4.6 + polish** (2026-09-19): supported-API belt
+  (`ctx.ui.setHiddenThinkingLabel("thinking… ▸")` at session_start — official
+  `types.d.ts:95` API, covers edge-case components that miss the accessor);
+  wave default 60ms; status-align lowercases the working message.
 - Key lessons baked into the code: chalk REWRITES close sequences inside
   strings ([23m → [3m) — cancel-italic must be done post-bake on final bytes;
   class fields defeat prototype accessors — patch methods, instrument
@@ -465,3 +469,48 @@ the btw audit and it.
   stale header comments corrected. Scout child cost: ~98K tokens total
   (9 turns; 21.1k in / 5.7k out / 71.5k cache-read) — detached-children
   usage is NOT rolled up by the parent cost summary (own session file).
+
+
+## 11. Pi customization profiles & boot-cost measurements (2026-09-19)
+
+Verified against pi 0.85.1 docs + binary + headless A/B timings (default
+thinking settings isolated where noted).
+
+### 11.1 The five native layering mechanisms
+
+| Mechanism | Granularity | Persisted where |
+| --- | --- | --- |
+| Global `~/.pi/agent/settings.json` | machine baseline | user settings |
+| `pi install -l` + project `.pi/settings.json` | per-project packages; **auto-installs on trust; committable/team-shareable** | repo |
+| `pi config` / `pi config -l` (built-in TUI) | individual extensions/skills/themes per scope | global or project settings |
+| Project package entry with `autoload: false` | delta over the global entry of the same package | project settings |
+| `PI_CODING_AGENT_DIR` | entire environment swap (work/personal/build rigs) | shell alias |
+| `pi -e npm:<pkg>` (repeatable) | per-run extension load | nothing |
+
+### 11.2 Measured boot costs (headless `pi -p`, warm)
+
+| Config | Warm wall time |
+| --- | --- |
+| pi binary floor (`--version`) | ~120ms |
+| No packages, default thinking | ~0.7s |
+| No packages, `defaultThinkingLevel: "max"` | ~1.8s (model thinking latency) |
+| + pi-subagents (101k lines TS) | +3.5–4s load |
+| + btw + pi-web-access | +~0.2s combined |
+| `pi -e npm:pi-subagents` (not in settings) | +~0.2s warm (+5.4s first-ever resolve) |
+| First boot after `/tmp/jiti` wipe | +6s transform re-compilation |
+
+### 11.3 Chosen setup (owner, 2026-09-19)
+
+- **Global** = QoL kit: minimal-mode, thought-label, status-align, tps,
+  footer-path, tilde-path, zai-search + the `subagents` hardening block
+  (`agentScope: "user"`, `scheduledRuns.enabled: false`).
+- **Build mode** = parameter-loaded: `pib` alias → `pi -e npm:pi-subagents -e
+  npm:pi-btw -e npm:pi-web-access` (~+0.2s warm). Per-project
+  `.pi/settings.json` remains the alternative where delegation is the default.
+- pi-web-access installed globally for fetch/verify legs of the zai-hybrid
+  agent variants (researcher-zai / evidence-auditor-zai via agentScanDirs).
+
+### 11.4 foreman trigger scorecard
+
+0 of 4 fired (build needs 2). Watch-item: pi-subagents load cost (+3.5–4s) —
+mitigated by the -e pattern; escalate only if sustained post-mitigation.
