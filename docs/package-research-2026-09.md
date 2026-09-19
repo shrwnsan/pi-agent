@@ -336,10 +336,12 @@ in `~/.pi/agent/settings.json`; apply hardening keys (`agentScope: "user"`,
 - Registers `zai_web_search` via `pi.registerTool` — usable by parent **and**
   pi-subagents children (tools list must name it explicitly; children never
   inherit ambient tools).
-- v1.1 (pending Phase 0): drop-in `researcher`/`evidence-auditor` agent
-  markdown variants that list `zai_web_search` in place of pi-web-access's four
-  tools — build once pi-subagents is installed and its agent discovery format
-  is confirmed on-machine.
+- ✅ v1.1 (2026-09-18): hybrid agent variants built — `agents/researcher-zai.md`
+  + `agents/evidence-auditor-zai.md` (search → `zai_web_search` on Coding Plan
+  quota; fetch/verify legs → pi-web-access's `fetch_content`/`get_search_content`/
+  `source_check`). pi-web-access installed for the fetch legs. Discovery wired via
+  `subagents.agentScanDirs` → the package-cache `agents/` dir (auto-flows on
+  `pi update`). Option (b) per owner.
 - Security spec: single endpoint allowlist (`api.z.ai/api/mcp/...`), 45s
   timeout, key via standard pi auth resolution, no telemetry, no other egress.
 

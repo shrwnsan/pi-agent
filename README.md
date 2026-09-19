@@ -38,6 +38,14 @@ pi-agent/
 | `answer` | Extracts questions from last assistant message and answers them interactively via `/answer` |
 | `pi-oauth-qwen` | ~~OAuth provider for Qwen models via device code flow with PKCE~~ **Suspended** — [Qwen's free OAuth tier ended April 15, 2026](https://github.com/QwenLM/qwen-code). Code preserved for potential future reactivation. |
 
+### Agent variants (pi-subagents)
+
+`agents/` holds hybrid agent definitions for [pi-subagents](https://www.npmjs.com/package/pi-subagents): search runs on `zai_web_search` (Z.AI Coding Plan quota via the `zai-search` extension), fetch/verify legs on pi-web-access. Requires `pi install npm:pi-web-access` + the `zai-search` extension.
+
+- `researcher-zai` / `evidence-auditor-zai` — quota-billed drop-ins for the builtins.
+
+Activate via pi settings: `"subagents": { "agentScanDirs": ["~/.pi/agent/git/github.com/shrwnsan/pi-agent/agents"] }` (auto-flowed on `pi update`).
+
 ## Ideal State
 
 Additional directories to add as needed:
