@@ -20,6 +20,11 @@
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 import { CustomEditor } from "@earendil-works/pi-coding-agent";
 
+/** pi's working message is "Working" — lowercase to match thought-label. */
+function tidy(s: string): string {
+	return s.replace(/Working/g, "working");
+}
+
 function visibleLen(s: string): number {
 	return s.replace(/\x1b\[[0-9;]*[A-Za-z]/g, "").length;
 }
@@ -47,7 +52,7 @@ export default function (pi: ExtensionAPI) {
 					}
 					const rightCap = " ──";
 					const leftCap = "──";
-					let status = this.workingStatusIndicator.renderInBorder(Math.max(1, width - 5));
+					let status = tidy(this.workingStatusIndicator.renderInBorder(Math.max(1, width - 5)));
 					let statusWidth = visibleLen(status);
 					if (statusWidth === 0) return orig.call(this, width, hiddenLineCount);
 
@@ -76,7 +81,7 @@ export default function (pi: ExtensionAPI) {
 						);
 					}
 					// Too narrow for the full label: pi's spinner-only branch, right-aligned.
-					status = this.workingStatusIndicator.renderSpinnerInBorder(Math.max(1, width - rightCap.length - 1));
+					status = tidy(this.workingStatusIndicator.renderSpinnerInBorder(Math.max(1, width - rightCap.length - 1)));
 					statusWidth = visibleLen(status);
 					const prefixW = Math.min(3, Math.max(0, width - statusWidth - rightCap.length));
 					return (
