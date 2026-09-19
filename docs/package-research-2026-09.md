@@ -148,10 +148,19 @@ Fallback keeping the fleet name: scoped **`@shrwnsan/pi-fleet`** (collision-free
 pi.dev lists scoped names fine, e.g. `@estebanforge/pi-glm-tweaks`).
 
 **Recommendation:** ~~`pi-foreman`~~ → **OWNER DECISION (2026-09-19): `pi-five`**
-(verified free on npm + `@shrwnsan/pi-five`). Rationale: High Five, Ready
-Player One — and the arithmetic: **4 subagents + the owner as the 5th member**
-(the orchestrator is a team member, not a fifth worker). Supersedes the
-foreman/taskforce picks. Reserved for the dormant §10.2 build.
+(verified free on npm; `@shrwnsan/pi-five` reserved by the owner's npm account —
+user-scoped names are auto-granted to the matching username). Rationale: High
+Five, Ready Player One — and the arithmetic: **4 subagents + the owner as the
+5th member** (the orchestrator is a team member, not a fifth worker).
+Supersedes the foreman/taskforce picks.
+
+**Name secured (2026-09-19):** placeholder scaffold committed at `npm/pi-five/`
+in this repo — honest reserved-name package (`0.0.1-alpha.1`, no executable
+code, README points to this design doc + pi-subagents). Publishing unscoped
+`pi-five` is an owner action from an authenticated machine:
+`cd npm/pi-five && npm publish --tag alpha`. Scoped `@shrwnsan/pi-five` needs
+nothing (already owned). Publishing the placeholder does NOT count as a
+§10.2 trigger.
 
 ## 7. Recommended actions
 

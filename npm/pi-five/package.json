@@ -1,0 +1,21 @@
+{
+  "name": "pi-five",
+  "version": "0.0.1-alpha.1",
+  "description": "Reserved: lightweight background-worker fleet experiment for the pi coding agent — 4 subagents + you as the fifth. Dormant, trigger-gated. For production delegation use pi-subagents.",
+  "license": "MIT",
+  "author": "shrwnsan",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/shrwnsan/pi-agent.git",
+    "directory": "npm/pi-five"
+  },
+  "keywords": [
+    "pi",
+    "pi-coding-agent",
+    "reserved",
+    "placeholder"
+  ],
+  "files": [
+    "README.md"
+  ]
+}
