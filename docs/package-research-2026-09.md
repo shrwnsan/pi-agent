@@ -147,7 +147,11 @@ npm reality check (2026-09-17) — the good names are crowded:
 Fallback keeping the fleet name: scoped **`@shrwnsan/pi-fleet`** (collision-free;
 pi.dev lists scoped names fine, e.g. `@estebanforge/pi-glm-tweaks`).
 
-**Recommendation:** `pi-foreman` (or `@shrwnsan/pi-fleet` if attached to "fleet").
+**Recommendation:** ~~`pi-foreman`~~ → **OWNER DECISION (2026-09-19): `pi-five`**
+(verified free on npm + `@shrwnsan/pi-five`). Rationale: High Five, Ready
+Player One — and the arithmetic: **4 subagents + the owner as the 5th member**
+(the orchestrator is a team member, not a fifth worker). Supersedes the
+foreman/taskforce picks. Reserved for the dormant §10.2 build.
 
 ## 7. Recommended actions
 
@@ -235,8 +239,8 @@ Isolation is a **call flag**, not frontmatter — the orchestrator decides.
 - **`pi-btw`: install, but audit `/btw:inject` merge-back first** (Gilfoyle
   dissent: highest-blast-radius code in this comparison — 2.8k lines of unearned
   trust). Fallback: use side-thread-only until the merge path is reviewed.
-- **pi-fleet / pi-foreman: buried unnamed.** pi-subagents won. The repo stays
-  boring; boring repos still work on Friday.
+- **pi-fleet / pi-foreman: buried, now named `pi-five` (owner, 2026-09-19).**
+  pi-subagents won; the name is reserved for the dormant exhumation spec.
 
 ## 9. Security review: pi-subagents (whitehat pass, 2026-09-17)
 
@@ -350,7 +354,7 @@ in `~/.pi/agent/settings.json`; apply hardening keys (`agentScope: "user"`,
 (no direct context write), check nothing else writes session entries. Verdict
 recorded here; fallback is side-thread-only usage.
 
-**Phase 3 — dormant.** 💤 `foreman` v1 only on §10.2 triggers. Budget ~800 lines,
+**Phase 3 — dormant.** 💤 `pi-five` v1 (owner-named 2026-09-19; née foreman) only on §10.2 triggers. Budget ~800 lines,
 zero deps (or +`yaml`): in-process `createAgentSession` runner (gen-3),
 task registry + `task_poll`/`task_wait`/`task_cancel`, `group:` keys,
 harden-list markdown agents, worktrees via lifted placement checks +
@@ -405,7 +409,7 @@ dist:
   against the repo's small-and-robust ethos — only as an explicitly opt-in
   experiment if requested.
 
-Renumber note: Phase 3 (dormant foreman) stays last; QoL slots as 2.5 between
+Renumber note: Phase 3 (dormant pi-five) stays last; QoL slots as 2.5 between
 the btw audit and it.
 
 ### 10.6 Phase 2.5 status — ✅ SHIPPED & CONFIRMED (2026-09-18)
@@ -510,7 +514,7 @@ thinking settings isolated where noted).
 - pi-web-access installed globally for fetch/verify legs of the zai-hybrid
   agent variants (researcher-zai / evidence-auditor-zai via agentScanDirs).
 
-### 11.4 foreman trigger scorecard
+### 11.4 pi-five trigger scorecard
 
 0 of 4 fired (build needs 2). Watch-item: pi-subagents load cost (+3.5–4s) —
 mitigated by the -e pattern; escalate only if sustained post-mitigation.
