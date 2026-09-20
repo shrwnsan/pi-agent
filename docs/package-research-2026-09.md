@@ -154,13 +154,12 @@ Five, Ready Player One — and the arithmetic: **4 subagents + the owner as the
 5th member** (the orchestrator is a team member, not a fifth worker).
 Supersedes the foreman/taskforce picks.
 
-**Name secured (2026-09-19):** placeholder scaffold committed at `npm/pi-five/`
-in this repo — honest reserved-name package (`0.0.1-alpha.1`, no executable
-code, README points to this design doc + pi-subagents). Publishing unscoped
-`pi-five` is an owner action from an authenticated machine:
-`cd npm/pi-five && npm publish --tag alpha`. Scoped `@shrwnsan/pi-five` needs
-nothing (already owned). Publishing the placeholder does NOT count as a
-§10.2 trigger.
+**Name secured & PUBLISHED (2026-09-20):** [`pi-five@0.0.1-alpha.1`](https://www.npmjs.com/package/pi-five)
+is live on the registry (tag `alpha` = `latest`), committed at `npm/pi-five/`
+in this repo — honest reserved-name package (3 files, no executable code,
+README points to this design doc + pi-subagents). The placeholder does NOT
+count as a §10.2 trigger. Scoped `@shrwnsan/pi-five` additionally reserved by
+the owner's npm account. Publish tokens revoked post-release.
 
 ## 7. Recommended actions
 
