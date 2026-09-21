@@ -5,6 +5,11 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.3.16] - 2026-09-20
+
+### Added
+- **zai-search** — Collapsed one-liner rows for `zai_web_search`, matching minimal-mode's convention: call `✓ zai-search "query" ▸`, done `✓ zai-search "query" → 10 sources ▸`, failed `✗ … ▸`; expand (Ctrl+O or click) restores the full formatted result list. Glyphs reuse minimal-mode's tier resolution, so unicode/nerd/ascii machines all agree. Previously the tool fell through to pi's generic custom-tool card — the last multi-line block in an otherwise one-liner TUI.
+
 ## [0.3.15] - 2026-09-16
 
 The whole 0.3.x line shipped on this day as one iteration arc — the

@@ -11,10 +11,17 @@
  * `zai_web_search` in their `tools:` frontmatter).
  *
  * Status: /zai-search
+ *
+ * Rendering: collapsed rows are one uniform line, matching minimal-mode's
+ * convention (`✓ zai-search "query" → 10 sources ▸`); expand (Ctrl+O or
+ * click) restores the full formatted result list. Glyphs come from
+ * minimal-mode's tier resolution so the rows never disagree.
  */
-import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
+import type { AgentToolResult, ExtensionAPI, Theme } from "@earendil-works/pi-coding-agent";
 import { StringEnum } from "@earendil-works/pi-ai";
+import { Text, truncateToWidth } from "@earendil-works/pi-tui";
 import { Type } from "typebox";
+import { loadConfig, resolveGlyphs, type GlyphSet } from "../minimal-mode/glyphs.ts";
 import { ZaiMcpSearchClient, ZAI_SEARCH_ENDPOINT, type ZaiSearchResult, type ZaiWebSearchArgs } from "./zai-client.ts";
 
 const PROVIDER = "zai";
@@ -50,6 +57,25 @@ async function resolveZaiApiKey(ctx: {
 	);
 }
 
+/** Uniform collapsed row — same shape as minimal-mode's rowLine. */
+function rowLine(theme: Theme, glyphs: GlyphSet, glyph: string, ok: boolean, summary: string, caret: string): string {
+	return theme.fg("muted", `${ok ? glyph : glyphs.fail} ${summary} ${caret}`.trim());
+}
+
+function truncateMiddle(text: string, max: number): string {
+	const flat = text.replace(/\s+/g, " ").trim();
+	if (flat.length <= max) return flat;
+	const half = Math.floor((max - 1) / 2);
+	return `${flat.slice(0, half)}…${flat.slice(-half)}`;
+}
+
+function textOutput(result: AgentToolResult<any>): string {
+	for (const block of result.content) {
+		if (block.type === "text") return block.text;
+	}
+	return "";
+}
+
 function formatSearchResults(query: string, results: ZaiSearchResult[]): string {
 	if (results.length === 0) return `No web results for "${query}".`;
 	const lines = results.map(
@@ -63,6 +89,13 @@ export default function (pi: ExtensionAPI) {
 	// within it. /reload re-runs the factory in the same process; the old
 	// session is intentionally not torn down — the server-side TTL reaps it.
 	const searchClient = new ZaiMcpSearchClient();
+
+	// Row-rendering state, same pattern as minimal-mode: glyph tier from its
+	// config/env resolution, a done-set so the collapsed call row yields to the
+	// result one-liner, and per-call start times for the running glyph.
+	const glyphs = resolveGlyphs(loadConfig());
+	const resultsDone = new Set<string>();
+	const starts = new Map<string, number>();
 
 	pi.registerTool({
 		name: "zai_web_search",
@@ -94,7 +127,7 @@ export default function (pi: ExtensionAPI) {
 				}),
 			),
 		}),
-		async execute(_toolCallId, params, signal, _onUpdate, ctx) {
+		async execute(toolCallId, params, signal, _onUpdate, ctx) {
 			const apiKey = await resolveZaiApiKey(ctx);
 			// Only defined optionals are sent — the server schema is
 			// additionalProperties:false, and empty strings change behavior.
@@ -104,6 +137,7 @@ export default function (pi: ExtensionAPI) {
 			if (params.contentSize) args.content_size = params.contentSize;
 			if (params.location) args.location = params.location;
 
+			starts.set(toolCallId, Date.now());
 			const results = await searchClient.search(args, {
 				apiKey,
 				signal: withSearchTimeout(signal),
@@ -112,6 +146,33 @@ export default function (pi: ExtensionAPI) {
 				content: [{ type: "text", text: formatSearchResults(params.query, results) }],
 				details: { query: params.query, count: results.length, links: results.map((r) => r.link) },
 			};
+		},
+		renderCall(args: any, theme: Theme, context: any) {
+			const query = truncateMiddle(String(args?.query ?? ""), 44);
+			const title = `zai-search "${query}"`;
+			if (context.expanded) {
+				const extras = [
+					args?.recency ? `recency: ${args.recency}` : "",
+					args?.domain ? `domain: ${args.domain}` : "",
+					args?.contentSize ? `size: ${args.contentSize}` : "",
+					args?.location ? `loc: ${args.location}` : "",
+				].filter(Boolean);
+				return new Text([title, ...extras.map((e) => `  ${e}`)].join("\n"), 0, 0);
+			}
+			if (resultsDone.has(context.toolCallId)) return new Text("", 0, 0); // result row owns the line
+			const glyph = starts.has(context.toolCallId) ? glyphs.running : glyphs.check;
+			return new Text(truncateToWidth(rowLine(theme, glyphs, glyph, true, title, glyphs.collapsed), context.width ?? 120), 0, 0);
+		},
+		renderResult(result: AgentToolResult<any>, options: any, theme: Theme, context: any) {
+			if (!options.isPartial) resultsDone.add(context.toolCallId);
+			if (options.expanded) return new Text(textOutput(result), 0, 0);
+			if (options.isPartial) return new Text("", 0, 0);
+			const query = truncateMiddle(String(context.args?.query ?? ""), 44);
+			const count = (result.details as { count?: number } | undefined)?.count;
+			const ok = context.isError !== true;
+			const countPart = ok && typeof count === "number" ? `${glyphs.arrow} ${count} sources` : "";
+			const line = rowLine(theme, glyphs, glyphs.check, ok, `zai-search "${query}" ${countPart}`.trim(), glyphs.collapsed);
+			return new Text(truncateToWidth(line, context.width ?? 120), 0, 0);
 		},
 	});
 
