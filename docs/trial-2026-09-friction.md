@@ -35,3 +35,15 @@ mitigated by the `pib -e` pattern; escalate only if sustained post-mitigation).
   (§10.4 pre-pass): tightening-only release (permission-scoping fix,
   dirty-worktree rejection, restrictive config keys). §10.4 ritual still due
   post-bump.
+
+### 2026-09-20 — UI consistency friction (owner-reported, fixed)
+
+- `zai_web_search` rendered pi's generic semi-collapsed card — the only
+  non-one-liner block among wrapped tools. Fixed in-repo (zai-search 0.3.16,
+  branch feat/web-tool-oneliners → main): collapsed rows now match
+  minimal-mode's convention; expand keeps the full result list. /reload-safe.
+- Same audit flagged pi-web-access rows (fetch_content collapsed = status +
+  200-char content preview; source_check = generic card). Upstream ask
+  required — minimal-mode cannot wrap third-party tools (getToolDefinition is
+  runner-internal; per-extension tool Maps; re-registering a name would break
+  execute). Proposal to be filed with Nico Bailon (active maintainer).
