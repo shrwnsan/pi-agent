@@ -18,6 +18,35 @@ PRs on repos it doesn't own). When upstream merges: revert the spec to `npm:pi-w
 pi-web-access.json's flag. Known-unknown: git-spec packages don't appear in the npm manifest — watch that the
 shared deps dir keeps p-limit/typebox/undici after future `pi update --extensions`.
 
+## Catch-up ritual (upstream moves; run on the Mac — it has full push rights)
+
+```bash
+G=~/.pi/agent/git/github.com/shrwnsan/pi-web-access
+git -C $G remote add upstream https://github.com/nicobailon/pi-web-access.git   # once
+git -C $G fetch upstream
+git -C $G log --oneline HEAD..upstream/main        # what's new upstream
+git -C $G rebase upstream/main                     # replay our one commit (conflicts → resolve → --continue)
+git -C $G -c credential.helper='!gh auth git-credential' push --force-with-lease fork fix/compact-collapsed-rows
+pi update --extensions                             # last: pi syncs its managed checkout to the pushed state
+```
+
+Order matters: force-push BEFORE `pi update` — pi's managed checkout resets to
+origin's branch state, which wiped an unpushed rebase once already (recovered
+from reflog). The container's PAT doesn't cover this fork (fine-grained
+allowlist, repo created after the token) → container pushes 404; the Mac's gh
+is full-scope. Adding the fork to the PAT's repository allowlist is optional.
+
+**Detection:** Watch `nicobailon/pi-web-access` → Releases-only; or
+`npm view pi-web-access version` vs last-known (0.31.0 as of 2026-09-22); or
+the fork page's "N commits behind" banner. Fold into the existing
+`pi update --extensions` cadence.
+
+**Lifecycle end:** when the flag ships in an **npm release** (merged-to-main ≠
+released — check `npm view pi-web-access` + changelog): revert the settings
+spec to `npm:pi-web-access@<ver>`, delete the fork branch, keep or drop
+pi-web-access.json (flag defaults off — file is harmless either way). An
+already-open PR auto-updates on force-push.
+
 Until merged/released, machines can
 dogfood via `"git:github.com/shrwnsan/pi-web-access@fix/compact-collapsed-rows"`
 (requires the shrwnsan fork — see trial log) or apply the patch to the

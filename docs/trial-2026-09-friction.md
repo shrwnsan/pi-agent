@@ -128,3 +128,10 @@ mitigated by the `pib -e` pattern; escalate only if sustained post-mitigation).
   machines after update + restart/reload.
 - PR upstream pending owner click (compare link in trial log + patches doc):
   PAT can't create PRs on non-owned repos.
+
+- Catch-up ritual documented in the patches doc (rebase onto upstream/main →
+  force-push → pi update; run on the Mac). First real cycle done: rebased onto
+  v0.31.0+main (5 upstream commits, zero conflicts, typechecked — baizhi.ts
+  tsc noise is pi's partial dep install, not ours; baizhi is dead code).
+  Lesson learned the hard way: force-push BEFORE pi update, or the managed
+  checkout wipes the unpushed rebase.
