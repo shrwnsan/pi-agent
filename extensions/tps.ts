@@ -58,6 +58,7 @@ export default function (pi: ExtensionAPI) {
 	// UTC day anchor: set at session_start (/reload + resume re-anchor). When the
 	// finished turn's UTC day differs, the timestamp grows a MM-DD prefix.
 	let anchorDayUtc: string | null = null;
+	let lastResumedLine: string | null = null;
 
 	const utcDayKey = (d: Date) =>
 		`${String(d.getUTCFullYear()).slice(2)}-${String(d.getUTCMonth() + 1).padStart(2, "0")}-${String(d.getUTCDate()).padStart(2, "0")}`;
@@ -78,7 +79,7 @@ export default function (pi: ExtensionAPI) {
 		try {
 			let group: { startTs: number; endTs: number; input: number; output: number; cacheRead: number; cacheWrite: number; totalTokens: number } | null = null;
 			let last: typeof group = null;
-			for (const entry of ctx.sessionManager.getEntries()) {
+			for (const entry of (ctx.sessionManager.getBranch?.() ?? ctx.sessionManager.getEntries()) as any[]) {
 				const ts = entry.timestamp ? Date.parse(entry.timestamp) : NaN;
 				if (entry.type === "message" && entry.message?.role === "user") {
 					group = Number.isNaN(ts) ? group : { startTs: ts, endTs: ts, input: 0, output: 0, cacheRead: 0, cacheWrite: 0, totalTokens: 0 };
@@ -105,7 +106,8 @@ export default function (pi: ExtensionAPI) {
 				parts.push(`· ${elapsedSeconds.toFixed(1)}s`);
 				const ended = new Date(last.endTs);
 				parts.push(`· ${utcStamp(ended, anchorDayUtc !== null && utcDayKey(ended) !== anchorDayUtc)}`);
-				ctx.ui.notify(parts.join(" "), "info");
+				lastResumedLine = parts.join(" ");
+				ctx.ui.notify(lastResumedLine, "info");
 			}
 		} catch {
 			/* reconstruction is best-effort */
@@ -116,7 +118,10 @@ export default function (pi: ExtensionAPI) {
 		description: "Toggle TPS performance notifications",
 		handler: async (_args, ctx) => {
 			tpsEnabled = !tpsEnabled;
-			ctx.ui.notify(`TPS notifications ${tpsEnabled ? "enabled" : "disabled"}`, "info");
+			const state = `TPS notifications ${tpsEnabled ? "enabled" : "disabled"}`;
+			// Re-show the reconstructed line on demand — the boot toast is transient
+			// and easy to miss.
+			ctx.ui.notify(lastResumedLine ? `${state} · last turn: ${lastResumedLine}` : state, "info");
 		},
 	});
 
