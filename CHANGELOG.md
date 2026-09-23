@@ -5,6 +5,11 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.3.18] - 2026-09-22
+
+### Changed
+- **pi 0.87.1 compat pass — verified, no code changes needed.** status-align: `custom-editor.js` is byte-identical between 0.85.1 and 0.87.1 (md5 `bf8d80ac`); the #8799 indicator move touched only the default editor's border, not the CustomEditor seam we mirror — the earlier high-risk call was wrong. thought-label: full behavioral pass on real 0.87.1 components (headless probe: instrumentation, wave advance, italic strip, baked dims, pi-side `setHiddenThinkingLabel` writes all verified). minimal-mode: all seven tool factories still exported, `lastComponent` render contract intact, `renderResult(result, options, theme, context)` unchanged. Headers updated from "version-locked to 0.85.x" to "verified on 0.85.x + 0.87.1". Machines holding at 0.85.1 (claw-hub) may move to 0.87.1 when ready; oci-prime needed nothing.
+
 ## [0.3.17] - 2026-09-20
 
 ### Fixed

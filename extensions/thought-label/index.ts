@@ -1,5 +1,5 @@
 /**
- * Thought Label — collapsed thinking header experiment. VERSION-LOCKED to pi 0.85.x.
+ * Thought Label — collapsed thinking header experiment. Verified on pi 0.85.x + 0.87.1 (real-component probe, 2026-09-22).
  *
  * v4.6.1 — wave state (phase/timer/tracked/turnActive/enabled) moved onto the
  * globalThis bag: per-generation closure vars froze the shimmer permanently

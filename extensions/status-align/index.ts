@@ -1,6 +1,7 @@
 /**
  * status-align — moves pi's embedded "Working" spinner/status from the LEFT
- * of the editor's top border to the RIGHT. VERSION-LOCKED to pi 0.85.x.
+ * of the editor's top border to the RIGHT. Verified on pi 0.85.x + 0.87.1
+ * (custom-editor.js byte-identical across both, md5 bf8d80ac, 2026-09-22).
  *
  * WHY A SEPARATE EXTENSION: the working indicator lives on CustomEditor
  * (editor border), not on AssistantMessageComponent (thought-label's seam).

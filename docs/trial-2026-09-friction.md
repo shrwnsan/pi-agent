@@ -98,3 +98,22 @@ mitigated by the `pib -e` pattern; escalate only if sustained post-mitigation).
   a 0.87.x compat pass (re-mirror status-align, live-probe thought-label,
   restart container on 0.87.1, run the harness) — until then 0.85.1 stays the
   verified version for machines that care about the patch extensions.
+
+### 2026-09-22 (later) — 0.87.1 compat pass: RESOLVED, earlier 🔴 corrected
+
+- status-align: custom-editor.js **byte-identical** 0.85.1↔0.87.1 (md5
+  bf8d80accc8dd97319152d52acafa7e2). #8799 moved the indicator into the
+  DEFAULT editor only; CustomEditor kept the standalone indicator. The
+  "high-risk misrender" call was wrong — no re-mirror needed. oci-prime's
+  live status-align was never broken.
+- thought-label: full behavioral PASS on REAL 0.87.1 components (tarball +
+  deps, headless jiti probe): instrumentation via wrapped updateContent ✓,
+  wave phase advances ✓, stripItalics on the real italic bake ✓, dims baked ✓,
+  pi-side setHiddenThinkingLabel writes tolerated ✓. Probe script pattern:
+  lite re-export alias (full index.js import hangs jiti >90s) + repo
+  node_modules symlink pair (pi-coding-agent → package root, pi-tui → dep).
+- minimal-mode: 7/7 factories exported, lastComponent contract intact,
+  renderResult signature unchanged. 🟢
+- Verdict: 0.85.1-hold lifted everywhere; claw-hub may update; headers now
+  read "verified on 0.85.x + 0.87.1". Harness (real-component probe) is the
+  template for future core bumps.
