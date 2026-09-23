@@ -10,7 +10,9 @@ previews; `source_check` has no renderer (generic card). This patch (against
 - `source_check`: one-line `renderCall`/`renderResult` registered only when
   the flag is on (stock behavior preserved when off).
 
-**Live: fork branch [`shrwnsan/pi-web-access@fix/compact-collapsed-rows`](https://github.com/shrwnsan/pi-web-access/tree/fix/compact-collapsed-rows)** — dogfooded via
+**RETIRED 2026-09-23 — dogfood rolled back (ops cost > cosmetic gain; upstream PR never opened). The fork shrwnsan/pi-web-access is slated for deletion. Patch preserved below for archaeology.**
+
+Formerly live: fork branch [`shrwnsan/pi-web-access@fix/compact-collapsed-rows`](https://github.com/shrwnsan/pi-web-access/tree/fix/compact-collapsed-rows)** — dogfooded via
 `"git:github.com/shrwnsan/pi-web-access@fix/compact-collapsed-rows"` in settings (dotfiles) +
 `~/.pi/agent/pi-web-access.json` → `{"compactRows": true}`. PR upstream: open the compare
 `nicobailon/pi-web-access/compare/main...shrwnsan:pi-web-access:fix/compact-collapsed-rows` (PAT can't create
