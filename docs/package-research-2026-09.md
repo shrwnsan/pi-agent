@@ -521,6 +521,12 @@ thinking settings isolated where noted).
   `.pi/settings.json` remains the alternative where delegation is the default.
 - pi-web-access installed globally for fetch/verify legs of the zai-hybrid
   agent variants (researcher-zai / evidence-auditor-zai via agentScanDirs).
+- **Package pins** (policy, 2026-09-20): npm entries in settings.json are
+  version-pinned to the audited set (`pi-subagents@0.70.1`, `pi-btw@0.5.0`,
+  `pi-web-access@0.30.0`) — pins are how a fresh machine (dotfiles
+  `bin/pi-bootstrap`, guide-026) reproduces this exact stack. Any bump runs
+  the §10.4 ritual first, then moves the pin in one commit. If pi rewrites
+  settings without pins, restore them before committing.
 
 ### 11.4 pi-five trigger scorecard
 
