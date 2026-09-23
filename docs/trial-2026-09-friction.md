@@ -47,3 +47,26 @@ mitigated by the `pib -e` pattern; escalate only if sustained post-mitigation).
   required — minimal-mode cannot wrap third-party tools (getToolDefinition is
   runner-internal; per-extension tool Maps; re-registering a name would break
   execute). Proposal to be filed with Nico Bailon (active maintainer).
+
+### 2026-09-22 — wave-freeze bug + §10.4 ritual (0.70.1 adoption)
+
+- **Bug (owner-reported):** thought-label shimmer stuck, only "nk" dimmed.
+  Root cause: /reload generation split — the pinned first-generation wrapper
+  rendered its own closure's phase-0 label while the new generation's
+  agent_start ticked its own (empty) tracked set; `touched=0` skipped
+  requestRender, so nothing ever re-baked. Fixed in v4.6.1: all wave state
+  (phase/timer/tracked/turnActive/enabled) moved onto the globalThis bag;
+  any generation's timer now drives the label. Two-generation headless test:
+  pre-fix reproduces the frozen `n|k` bytes exactly, post-fix the trough
+  travels. Full restart required to apply (patch-extension rule).
+- **pi update --extensions ran on owner machine:** pi-subagents 0.69.0 →
+  0.70.1 (pin matches), pi-btw floated 0.5.0 → 0.6.0 (container settings were
+  unpinned — now converged to the pinned file). Empirical pin semantics:
+  `pi update --extensions` never downgrades; pins bind on fresh install.
+- **§10.4 ritual on 0.70.1:** endpoints = agent-plugins.org schema constants
+  + shittycodingagent.ai share-URL builder (user-initiated share) — clean;
+  "telemetry" grep hits are strings, not beacons; agentScope/scheduledRuns
+  keys still honored. **pi-btw 0.6.0 review:** no endpoints/telemetry/exec;
+  no shipped changelog (upstream gap, minor). Verdict: pins move to 0.70.1 /
+  0.6.0 / 0.30.0 — recorded in §11.3 (done earlier today).
+- Tripwires unchanged: 0 fired, 1 watch. Scorecard review ~2026-10-02.

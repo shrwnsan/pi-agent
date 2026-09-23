@@ -5,6 +5,11 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.3.17] - 2026-09-20
+
+### Fixed
+- **thought-label** — Wave no longer freezes after `/reload`: mutable wave state (phase, timer, started-at, tracked instances, turn flag, enabled toggle) moved onto the `globalThis` bag next to the TUI ref. Root cause of the stuck shimmer (only "nk" dimmed): /reload keeps the first generation's pinned prototype wrapper, so the new generation's `agent_start` ticked its own empty `tracked` set while the wrapper rendered its own phase-0 label — the trough never travelled. Any generation's timer now drives the label any generation renders; the `/thought-label` enabled toggle also survives reloads. Regressed and fixed under a two-generation headless test (jiti + shimmed component): pre-fix reproduces the frozen `n|k` bytes exactly, post-fix the trough travels.
+
 ## [0.3.16] - 2026-09-20
 
 ### Added

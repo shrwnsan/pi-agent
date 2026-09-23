@@ -1,6 +1,11 @@
 /**
  * Thought Label — collapsed thinking header experiment. VERSION-LOCKED to pi 0.85.x.
  *
+ * v4.6.1 — wave state (phase/timer/tracked/turnActive/enabled) moved onto the
+ * globalThis bag: per-generation closure vars froze the shimmer permanently
+ * after any /reload (new generation ticked its own empty tracked set while
+ * the first generation's pinned wrapper rendered its own phase-0 label).
+ *
  * Want:  "󰧑 Thinking... ▸" (animated shimmer on "Thinking...") while a turn streams
  *        "󰧑 Thought · 4s ▸" once it ends (or "Thought · a few seconds" for short ones)
  *        "󰧑 Thought ▸" for pre-extension historical blocks (duration unknown)
@@ -71,11 +76,39 @@ function fmtDuration(seconds: number, briefMaxS: number, briefText: string): str
 	return r > 0 ? `${m}m ${r}s` : `${m}m`;
 }
 
+/** Cross-generation wave state — see the bag init inside default(). */
+interface WaveState {
+	phase: number;
+	timer: ReturnType<typeof setInterval> | null;
+	startedAt: number;
+	tracked: Set<any>;
+	turnActive: boolean;
+	enabled: boolean;
+}
+
 export default function (pi: ExtensionAPI) {
 	const cfg = loadTierConfig<ThoughtLabelConfig & { tier?: "unicode" | "nerd" | "ascii"; nerdGlyph?: string; disabled?: boolean }>(
 		CONFIG_PATH,
 	);
-	let enabled = cfg.disabled !== true;
+	// Cross-generation state (v4.6.1): /reload keeps the FIRST generation's
+	// prototype wrapper (tagged idempotent skip), so per-generation closure
+	// vars split the wave: after a reload the new generation's agent_start
+	// ticked its OWN empty tracked set while the old wrapper rendered its OWN
+	// frozen phase — the shimmer stuck at sin(i*0.9) < -0.5 ("nk" in
+	// "thinking") forever. All mutable wave state lives on globalThis now:
+	// whichever generation owns the timer, the wrapper's label moves. A
+	// /reload also keeps the enabled/disabled toggle instead of resetting it.
+	const wave = ((
+		globalThis as { __thoughtLabelWave?: WaveState }
+	).__thoughtLabelWave ??= {
+		phase: 0,
+		timer: null as ReturnType<typeof setInterval> | null,
+		startedAt: 0,
+		tracked: new Set<any>(),
+		turnActive: false,
+		enabled: cfg.disabled !== true,
+	});
+	const tracked = wave.tracked;
 	// Nerd-first defaults: md-brain 󰧑 (U+F09D1). Stock (non-NF) machines set
 	// {"tier": "unicode"} locally → big ☕ via system emoji fonts. ASCII = bare.
 	const tierCfg = { tier: "nerd" as "nerd" | "unicode" | "ascii", nerdGlyph: "󰧑", ...cfg };
@@ -87,7 +120,6 @@ export default function (pi: ExtensionAPI) {
 
 	let installed = false;
 	let installNote = "";
-	const tracked = new Set<any>();
 	// Historical durations, reconstructed at session_start from session-entry
 	// timestamps: assistant-entry ts − previous branch-entry ts (entries are
 	// written at completion, so the gap = generation time of that message —
@@ -98,24 +130,30 @@ export default function (pi: ExtensionAPI) {
 	// TUI ref lives on globalThis: it survives /reload closure generations (the
 	// tagged prototype wrapper is installed once, so a reloaded generation must
 	// read the ref captured by an earlier generation or by the next mount).
-	const gt = globalThis as { __thoughtLabelTui?: { requestRender: (force?: boolean) => void } | null };
+	const gt = globalThis as {
+		__thoughtLabelTui?: { requestRender: (force?: boolean) => void } | null;
+		__thoughtLabelWave?: {
+			phase: number;
+			timer: ReturnType<typeof setInterval> | null;
+			startedAt: number;
+			tracked: Set<any>;
+			turnActive: boolean;
+			enabled: boolean;
+		};
+	};
 	function getTui() {
 		return gt.__thoughtLabelTui ?? null;
 	}
-	let waveTimer: ReturnType<typeof setInterval> | null = null;
-	let waveStartedAt = 0;
-	let wavePhase = 0;
 
 	// Current turn timing state. respMs = first provider roundtrip of the turn
 	// (the thinking phase, at least for think-then-act models at high effort).
-	let turnActive = false;
 	let reqStartMs: number | null = null;
 	let respEndMs: number | null = null;
 	let lastDurText: string | null = null;
 
 	function liveLabel(inst: any): string {
 		let raw = (inst.__tlRaw ?? "Thinking...").toLowerCase();
-		if (!enabled) return raw;
+		if (!wave.enabled) return raw;
 		let label: string;
 		if (inst.__tlFrozen) {
 			label = inst.__tlFrozen;
@@ -136,7 +174,7 @@ export default function (pi: ExtensionAPI) {
 					[...animatePart]
 						.map((ch, i) => {
 							// Faint troughs travelling through otherwise-normal chars.
-							return Math.sin(i * 0.9 - wavePhase) < -0.5 ? `\x1b[2m${ch}\x1b[22m` : ch;
+							return Math.sin(i * 0.9 - wave.phase) < -0.5 ? `\x1b[2m${ch}\x1b[22m` : ch;
 						})
 						.join("") +
 					suffix
@@ -219,14 +257,14 @@ export default function (pi: ExtensionAPI) {
 
 	function waveTick(): void {
 		const tui = getTui();
-		if (!turnActive || !tui) return;
+		if (!wave.turnActive || !tui) return;
 		// Self-reap: a /reload mid-turn orphans this generation's interval (its
 		// agent_end handler is gone). Any real turn ends long before this cap.
-		if (Date.now() - waveStartedAt > 30 * 60_000) {
+		if (Date.now() - wave.startedAt > 30 * 60_000) {
 			stopWave();
 			return;
 		}
-		wavePhase += 0.6;
+		wave.phase += 0.6;
 		try {
 			let touched = 0;
 			for (const inst of tracked) {
@@ -247,19 +285,19 @@ export default function (pi: ExtensionAPI) {
 	}
 
 	function startWave(): void {
-		if (waveTimer || !waveEnabled || !waveEnabledNow()) return;
-		waveStartedAt = Date.now();
-		waveTimer = setInterval(waveTick, waveMs);
+		if (wave.timer || !waveEnabled || !waveEnabledNow()) return;
+		wave.startedAt = Date.now();
+		wave.timer = setInterval(waveTick, waveMs);
 	}
 
 	function waveEnabledNow(): boolean {
-		return enabled && waveEnabled;
+		return wave.enabled && waveEnabled;
 	}
 
 	function stopWave(): void {
-		if (waveTimer) {
-			clearInterval(waveTimer);
-			waveTimer = null;
+		if (wave.timer) {
+			clearInterval(wave.timer);
+			wave.timer = null;
 		}
 	}
 
@@ -288,7 +326,7 @@ export default function (pi: ExtensionAPI) {
 					stripItalics(this);
 					// Historical block with a reconstructed duration: freeze + re-bake
 					// once (the first bake happened before the freeze was known).
-					if (enabled && !this.__tlFrozen && this.lastMessage) {
+					if (wave.enabled && !this.__tlFrozen && this.lastMessage) {
 						const hist = histDur.get(this.lastMessage);
 						if (hist) {
 							this.__tlFrozen = hist;
@@ -342,7 +380,7 @@ export default function (pi: ExtensionAPI) {
 			// the raw stays glyph-free (no double-prefix). Per-instance wave and
 			// durations remain accessor-side.
 			const ui = (ctx as any).ui;
-			if (enabled && ui && typeof ui.setHiddenThinkingLabel === "function") {
+			if (wave.enabled && ui && typeof ui.setHiddenThinkingLabel === "function") {
 				ui.setHiddenThinkingLabel("thinking… ▸");
 			}
 		} catch {
@@ -373,7 +411,7 @@ export default function (pi: ExtensionAPI) {
 	});
 
 	pi.on("agent_start", () => {
-		turnActive = true;
+		wave.turnActive = true;
 		reqStartMs = null;
 		respEndMs = null;
 		// Everything still unfrozen predates this turn — but if it has a
@@ -405,7 +443,7 @@ export default function (pi: ExtensionAPI) {
 	});
 
 	pi.on("agent_end", () => {
-		turnActive = false;
+		wave.turnActive = false;
 		stopWave();
 		const now = Date.now();
 		const seconds =
@@ -415,7 +453,7 @@ export default function (pi: ExtensionAPI) {
 					? (now - reqStartMs) / 1000
 					: null;
 		lastDurText = seconds !== null ? fmtDuration(seconds, briefMaxS, briefText) : null;
-		if (!enabled) return;
+		if (!wave.enabled) return;
 		// Resolve every turn instance now — with the measured duration when we
 		// have one, otherwise duration-less. Never leave them dangling for the
 		// next agent_start to sweep with the wrong label.
@@ -433,17 +471,17 @@ export default function (pi: ExtensionAPI) {
 	pi.registerCommand("thought-label", {
 		description: "Toggle the Thought Label collapsed-thinking experiment",
 		handler: async (_args, ctx) => {
-			enabled = !enabled;
+			wave.enabled = !wave.enabled;
 			if (!installed) {
 				installed = install();
 			}
-			if (!enabled) stopWave();
+			if (!wave.enabled) stopWave();
 			const trackedCount = tracked.size;
 			ctx.ui.notify(
-				`thought-label ${enabled ? "enabled" : "disabled"} · patched:${installed} · tracked:${trackedCount} · hist:${histDur.size} · lastDur:${lastDurText ?? "—"} · wave:${waveEnabled && getTui() ? "on" : "off"}`,
+				`thought-label ${wave.enabled ? "enabled" : "disabled"} · patched:${installed} · tracked:${trackedCount} · hist:${histDur.size} · lastDur:${lastDurText ?? "—"} · wave:${waveEnabled && getTui() ? "on" : "off"}`,
 				"info",
 			);
-			if (enabled) reRenderTracked();
+			if (wave.enabled) reRenderTracked();
 		},
 	});
 }
