@@ -5,6 +5,11 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.3.19] - 2026-09-22
+
+### Fixed
+- **tps** — Per-run TPS notification now survives `--resume`: `session_start` reconstructs the LAST completed turn from session entries (user-entry ts → last-assistant-entry ts as the duration, matching live wall-clock semantics; assistant usage accumulated across tool-call rounds) and re-emits the same line, UTC day-rollover stamp included. A trailing aborted turn (user message with no response) no longer masks the last completed turn. Headless-tested against synthetic entries. New turns after resume were always measured correctly (`agent_end` carries only the run's new messages — verified in pi source); this fixes the missing historical line.
+
 ## [0.3.18] - 2026-09-22
 
 ### Changed

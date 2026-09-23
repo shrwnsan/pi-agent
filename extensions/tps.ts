@@ -66,8 +66,50 @@ export default function (pi: ExtensionAPI) {
 		return withDate ? `${String(d.getUTCMonth() + 1).padStart(2, "0")}-${String(d.getUTCDate()).padStart(2, "0")} ${hm}` : hm;
 	};
 
-	pi.on("session_start", () => {
+	pi.on("session_start", (_event, ctx) => {
 		anchorDayUtc = utcDayKey(new Date());
+		// Resume reconstruction: rebuild the LAST finished turn from session
+		// entries and re-emit its line, so --resume restores the per-run stats
+		// (same philosophy as thought-label's histDur). A turn = the assistant
+		// entries after a user entry; duration = last-assistant ts − user ts,
+		// matching live semantics (agent_start → agent_end wall clock includes
+		// tool time).
+		if (!ctx.hasUI || !tpsEnabled) return;
+		try {
+			let group: { startTs: number; endTs: number; input: number; output: number; cacheRead: number; cacheWrite: number; totalTokens: number } | null = null;
+			let last: typeof group = null;
+			for (const entry of ctx.sessionManager.getEntries()) {
+				const ts = entry.timestamp ? Date.parse(entry.timestamp) : NaN;
+				if (entry.type === "message" && entry.message?.role === "user") {
+					group = Number.isNaN(ts) ? group : { startTs: ts, endTs: ts, input: 0, output: 0, cacheRead: 0, cacheWrite: 0, totalTokens: 0 };
+				} else if (entry.type === "message" && entry.message?.role === "assistant" && entry.message.usage && group) {
+					const u = entry.message.usage;
+					group.input += u.input || 0;
+					group.output += u.output || 0;
+					group.cacheRead += u.cacheRead || 0;
+					group.cacheWrite += u.cacheWrite || 0;
+					group.totalTokens += u.totalTokens || 0;
+					if (!Number.isNaN(ts)) group.endTs = ts;
+					last = group; // latest group that actually produced usage
+				}
+			}
+			if (last && last.output > 0 && last.endTs > last.startTs) {
+				const elapsedSeconds = (last.endTs - last.startTs) / 1000;
+				const parts = [`${glyph}${(last.output / elapsedSeconds).toFixed(1)}tps`, `↑${humanize(last.input)}`, `↓${humanize(last.output)}`];
+				if (showTotal) parts.push(`Σ${humanize(last.totalTokens)}`);
+				if (last.cacheRead > 0 || last.cacheWrite > 0) {
+					parts.push(`R${humanize(last.cacheRead)}`, `W${humanize(last.cacheWrite)}`);
+					const promptTokens = last.input + last.cacheRead + last.cacheWrite;
+					if (last.cacheRead > 0 && promptTokens > 0) parts.push(`H${((last.cacheRead / promptTokens) * 100).toFixed(1)}%`);
+				}
+				parts.push(`· ${elapsedSeconds.toFixed(1)}s`);
+				const ended = new Date(last.endTs);
+				parts.push(`· ${utcStamp(ended, anchorDayUtc !== null && utcDayKey(ended) !== anchorDayUtc)}`);
+				ctx.ui.notify(parts.join(" "), "info");
+			}
+		} catch {
+			/* reconstruction is best-effort */
+		}
 	});
 
 	pi.registerCommand("tps", {
