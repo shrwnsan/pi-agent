@@ -117,3 +117,14 @@ mitigated by the `pib -e` pattern; escalate only if sustained post-mitigation).
 - Verdict: 0.85.1-hold lifted everywhere; claw-hub may update; headers now
   read "verified on 0.85.x + 0.87.1". Harness (real-component probe) is the
   template for future core bumps.
+
+### 2026-09-22 (evening) — fetch-collapse shipped via fork dogfood
+
+- PAT can't fork/create repos (403) → owner clicked Fork (shrwnsan/pi-web-access);
+  `fix/compact-collapsed-rows` pushed (compactRows flag, v0.30.0 base, typecheck+build clean).
+- Settings (dotfiles) now point pi-web-access at the fork branch with
+  compactRows:true (dogfood exception to the pin policy — revert spec on
+  upstream merge). Fetch/web_search/source_check rows collapse on all
+  machines after update + restart/reload.
+- PR upstream pending owner click (compare link in trial log + patches doc):
+  PAT can't create PRs on non-owned repos.
