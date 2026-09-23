@@ -1,0 +1,78 @@
+From 73d0a2a88abefe7532e9a28e7afb545875a0e306 Mon Sep 17 00:00:00 2001
+From: shrwnsan <38465+shrwnsan@users.noreply.github.com>
+Date: Wed, 23 Sep 2026 16:38:43 +0000
+Subject: [PATCH] compactRows: one-line collapsed tool rows for
+ web_search/fetch_content + source_check one-liners (config-gated, default
+ off)
+
+---
+ index.ts | 25 +++++++++++++++++++++++++
+ 1 file changed, 25 insertions(+)
+
+diff --git a/index.ts b/index.ts
+index 0e0277b..b31dfa0 100644
+--- a/index.ts
++++ b/index.ts
+@@ -145,6 +145,8 @@ function renderSearchErrorPlan(plan: SearchErrorPlan, expanded: boolean, theme:
+ }
+ 
+ interface WebSearchConfig {
++	/** Collapsed tool rows: renderResult returns the single status line unless expanded. */
++	compactRows?: unknown;
+ 	anysearchApiKey?: unknown;
+ 	xcrawlApiKey?: unknown;
+ 	brightdataApiKey?: unknown;
+@@ -1048,6 +1050,8 @@ export default function (pi: ExtensionAPI) {
+ 		: `all searches every eligible allowed provider (${allEligibleProviders.map(providerLabel).join(", ")})`;
+ 	const curatorRunState = registerCuratorRunLifecycle(pi);
+ 	const toolNames = resolveToolNames(initConfig);
++	// Collapsed one-line rows for the tool result blocks (config: "compactRows": true).
++	const compactRows = initConfig.compactRows === true;
+ 	const webSearchEnabled = isToolEnabled(initConfig, "webSearch");
+ 	const sourceCheckEnabled = isToolEnabled(initConfig, "sourceCheck");
+ 	const fetchContentEnabled = isToolEnabled(initConfig, "fetchContent");
+@@ -2325,6 +2329,9 @@ export default function (pi: ExtensionAPI) {
+ 
+ 			const totalLines = lines.length;
+ 
++			if (compactRows && !expanded) {
++				return new Text(statusLine, 0, 0);
++			}
+ 			if (!expanded) {
+ 				const box = new Box(1, 0);
+ 				box.addChild(new Text(statusLine, 0, 0));
+@@ -2376,6 +2383,21 @@ export default function (pi: ExtensionAPI) {
+ 		label: "Source Check",
+ 		description: "Gather web sources for a claim and return a bounded machine-readable research artifact with exact passage citations for manual review.",
+ 		promptSnippet: "Gather structured source evidence and passage-level citations for manual semantic review of a claim.",
++		...(compactRows ? {
++			renderCall(args: { claim?: unknown }, theme: any) {
++				const claim = String(args?.claim ?? "");
++				const display = claim.length > 60 ? claim.slice(0, 57) + "..." : claim;
++				return new Text(theme.fg("toolTitle", theme.bold("source-check ")) + theme.fg("accent", `"${display}"`), 0, 0);
++			},
++			renderResult(result: AgentToolResult<any>, { expanded }: { expanded?: boolean }, theme: any) {
++				const textContent = result.content.find((c) => c.type === "text")?.text || "";
++				if (!expanded) {
++					const firstLine = textContent.split("\n").find((l: string) => l.trim().length > 0) || "done";
++					return new Text(theme.fg("muted", `source-check ${firstLine.slice(0, 120)}`), 0, 0);
++				}
++				return new Text(textContent, 0, 0);
++			},
++		} : {}),
+ 		parameters: Type.Object({
+ 			claim: Type.String({ description: "The assertion to gather web sources for." }),
+ 			queries: Type.Optional(Type.Array(Type.String(), { description: "Search queries (default: the claim)." })),
+@@ -2794,6 +2816,9 @@ export default function (pi: ExtensionAPI) {
+ 					statusLine += theme.fg("muted", ` | ${formatSeconds(Math.floor(details.duration))} total`);
+ 				}
+ 				const textContent = result.content.find((c) => c.type === "text")?.text || "";
++				if (compactRows) {
++					return new Text(statusLine, 0, 0);
++				}
+ 				if (!expanded) {
+ 					const brief = textContent.length > 200 ? textContent.slice(0, 200) + "..." : textContent;
+ 					return new Text(statusLine + "\n" + theme.fg("dim", brief), 0, 0);
+-- 
+2.47.3
+
