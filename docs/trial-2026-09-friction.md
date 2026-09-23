@@ -135,3 +135,21 @@ mitigated by the `pib -e` pattern; escalate only if sustained post-mitigation).
   tsc noise is pi's partial dep install, not ours; baizhi is dead code).
   Lesson learned the hard way: force-push BEFORE pi update, or the managed
   checkout wipes the unpushed rebase.
+
+### 2026-09-23 — compact-rows dogfood ROLLED BACK
+
+- Owner verdict: ops-to-cosmetic ratio failed (launchd autosync + fork
+  maintenance + PAT allowlist mgmt for a collapsed fetch block). Rolled back:
+  settings restored to `npm:pi-web-access@0.30.0`, `web-search.json` flag
+  removed, launchd autosync + script removed (dotfiles 9061168, history
+  rewritten to drop an accidental sweep commit that had published the owner's
+  uncommitted working-tree files — see below), fork clone removed, fork repo
+  to be deleted by owner.
+- Kept: `pi-agent-browser-native@0.6.17` pin (real bug fix, zero ops); the
+  carryable patch in `docs/patches/` (archaeology / future reconsideration);
+  the Gilfoyle review insights (stall-vs-crash failure design, untested-
+  component principle, pi-managed checkout reset semantics).
+- process note: an accidental `git add -A` swept the owner's uncommitted
+  claude/gemini working-tree files into a pushed commit; history was
+  rewritten (force-with-lease) within minutes to remove them from the remote
+  tip. GitHub may retain unreachable objects until GC.
