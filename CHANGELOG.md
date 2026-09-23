@@ -5,6 +5,11 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.3.21] - 2026-09-22
+
+### Changed
+- **tps** — `/tps` gained subcommands: `/tps show` re-emits the reconstructed line without touching the toggle (the v0.3.20 behavior flipped notifications on every inspection press — the double-press wart), `/tps on` / `/tps off` set state explicitly, bare `/tps` keeps toggling as before.
+
 ## [0.3.20] - 2026-09-22
 
 ### Changed

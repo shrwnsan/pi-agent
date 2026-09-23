@@ -115,12 +115,18 @@ export default function (pi: ExtensionAPI) {
 	});
 
 	pi.registerCommand("tps", {
-		description: "Toggle TPS performance notifications",
-		handler: async (_args, ctx) => {
-			tpsEnabled = !tpsEnabled;
+		description: "Toggle/show TPS performance notifications (/tps [on|off|show])",
+		handler: async (args, ctx) => {
+			const sub = String(args ?? "").trim().toLowerCase();
+			if (sub === "show") {
+				// Inspection only — never flips the toggle.
+				ctx.ui.notify(lastResumedLine ? `last turn: ${lastResumedLine}` : "no reconstructed turn this session", "info");
+				return;
+			}
+			if (sub === "on") tpsEnabled = true;
+			else if (sub === "off") tpsEnabled = false;
+			else tpsEnabled = !tpsEnabled;
 			const state = `TPS notifications ${tpsEnabled ? "enabled" : "disabled"}`;
-			// Re-show the reconstructed line on demand — the boot toast is transient
-			// and easy to miss.
 			ctx.ui.notify(lastResumedLine ? `${state} · last turn: ${lastResumedLine}` : state, "info");
 		},
 	});
