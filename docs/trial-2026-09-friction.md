@@ -70,3 +70,31 @@ mitigated by the `pib -e` pattern; escalate only if sustained post-mitigation).
   no shipped changelog (upstream gap, minor). Verdict: pins move to 0.70.1 /
   0.6.0 / 0.30.0 — recorded in §11.3 (done earlier today).
 - Tripwires unchanged: 0 fired, 1 watch. Scorecard review ~2026-10-02.
+
+### 2026-09-22 — pi core jumped 0.85.1 → 0.87.1 (version-lock exposure)
+
+- Owner ran `pi update`: 0.87.1 (0.86.0 09-19, 0.87.0 09-21, 0.87.1 09-22 —
+  fast core churn). Container ephemeral disk resets to 0.85.1 between turns;
+  real machines decide their own version.
+- **status-align (HIGH RISK):** changelog #8799 (0.86.x/0.87.0) moved the
+  working indicator INTO the default editor border; 0.87.0 also moved
+  compaction/branch/retry spinners there. Seam functions still exist on
+  CustomEditor (renderTopBorder + setWorkingStatusIndicator verified in
+  0.87.1 dist) so the capability probes PASS — but the 0.85.1-mirrored
+  composition is likely stale → misrender risk, the worse failure mode.
+  Needs re-mirror against 0.87.1 + a behavior guard, not just probes.
+- **thought-label (PROBABLE OK, unverified live):** updateContent seam intact
+  (assistant-message.js calls it at 3 sites); label bake still
+  `theme.italic(theme.fg("thinkingText", this.hiddenThinkingLabel))` —
+  stripItalics seam unchanged; pi now assigns hiddenThinkingLabel in the
+  constructor AND re-asserts it in a setter — both flow into our own
+  accessor's set (raw store) — compatible by design. Needs live probe on
+  0.87.1.
+- **minimal-mode:** no tool-renderer contract changes spotted in 0.86–0.87
+  changelog; verify on restart.
+- **Security note:** 0.87.0 added `/bug` which uploads env + transcript
+  bundles to Radius by default — pi-lid egress allowlist should know.
+- Tripwires unchanged (they gate pi-subagents, not pi core). Action: schedule
+  a 0.87.x compat pass (re-mirror status-align, live-probe thought-label,
+  restart container on 0.87.1, run the harness) — until then 0.85.1 stays the
+  verified version for machines that care about the patch extensions.
