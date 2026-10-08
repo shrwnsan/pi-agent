@@ -4,22 +4,23 @@ Compact tool result summaries on top of pi's built-in renderers. Uniform,
 single-color rows — one line per tool call.
 
 ```
-Running:                            Collapsed:                          Expanded (Ctrl+O or click):
-  ○ git clone … ▸                     ✓ git status ▸                      $ git status -s
-                                      ✓ grep /pat/ → 12 matches ▸         ... full output ...
+Queued / Running:                    Collapsed:                          Expanded (Ctrl+O or click):
+  … git clone … ▸                     ✓ git status ▸                      $ git status -s
+  ○ git clone … ▸                     ✓ grep /pat/ → 12 matches ▸         ... full output ...
                                       ✓ edit src/foo.ts ▸
                                       Thinking… ▸
 ```
 
-Rows collapse the moment execution starts — the `○` running line replaces
-the command header so long commands never wrap into a wall of text. Expand
-while running to watch the built-in streaming preview; nothing is lost,
-just folded.
+Rows are one-liners from the moment the block appears — queued (`…`) while
+args stream or the call awaits its turn, `○` from the moment execution
+starts — so long commands never wrap into a wall of text, not even briefly.
+Expand while running to watch the built-in streaming preview; nothing is
+lost, just folded.
 
 Collapsed rows are a **single muted line** — glyph, command/query summary,
 collapse caret. Timing is the expanded view's job: pi's built-in rendering
-shows the exact "Took X.YZs". The `$ command` header is suppressed from the
-moment execution starts, so long commands never wrap into a wall of text.
+shows the exact "Took X.YZs". The `$ command` header never renders
+collapsed — one-liners from the first frame, queued through running.
 Expanded rows are the built-in rendering, untouched: full command header +
 complete output — no summary line in between.
 
@@ -45,6 +46,7 @@ longer replaces any of that**. It only adds what's still missing:
 | `read`  | `✓ read src/foo.ts ▸` | built-in full output |
 | `write` | `✓ write src/foo.ts ▸` | built-in full output |
 | `edit`  | `✓ edit src/foo.ts ▸` | built-in header + diff preview |
+| any, queued | `… git clone … ▸` | built-in header |
 | any, running | `○ git clone … ▸` | streaming preview |
 | thinking | `Thinking… ▸` (label configurable) | full thinking text |
 

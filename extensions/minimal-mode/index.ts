@@ -1,17 +1,19 @@
 /**
  * Minimal Mode — compact tool result summaries on top of pi's built-in renderers.
  *
- * Collapsed rows are ONE uniform line per call, in all three states:
+ * Collapsed rows are ONE uniform line per call, in every state:
  *
+ *   queued:     … git clone … ▸          ← registered, not yet executing
  *   running:    ○ git clone … ▸
  *   collapsed:  ✓ git status ▸
  *   failed:     ✗ npm test ▸
  *   expanded:   $ git status -s            ← built-in header (full command)
  *               ... full output ...        ← built-in output, nothing else
  *
- * The `$ command` header is suppressed from the moment execution starts, so
- * long commands never wrap into a wall of text. Expanding restores the
- * built-in header and full output — no summary line in between.
+ * Collapsed, the `$ command` header never appears: the one-liner owns the
+ * row from the first frame, so long commands never wrap into a wall of text
+ * — not even while args stream or the call waits for its turn. Expanding
+ * restores the built-in header and full output — no summary line in between.
  *
  * Clicks: one left-click anywhere on a wrapped row toggles that block. Rapid
  * re-clicks (<350ms) are debounced — a double-click no longer toggles twice
@@ -87,7 +89,16 @@ function rowLine(
 ): string {
 	const body = `${summary} ${caret}`.trim();
 	if (statusColor) {
-		const color = glyph === glyphs.running ? "accent" : ok ? "success" : "error";
+		// Queued rows (…) stay muted even in statusColor mode — nothing has
+		// happened yet, so there is nothing to color.
+		const color =
+			glyph === glyphs.running
+				? "accent"
+				: glyph === glyphs.ellipsis
+					? "muted"
+					: ok
+						? "success"
+						: "error";
 		return `${theme.fg(color, glyph)} ${theme.fg("muted", body)}`;
 	}
 	return theme.fg("muted", `${glyph} ${body}`);
@@ -100,8 +111,8 @@ function tildePath(path: string): string {
 }
 
 /** Per-tool start times, shared by renderCall/renderResult at draw time: lets
- *  the collapsed header tell "executing" from "not started yet" so the built-in
- *  `$ command` header stays suppressed while a call runs. */
+ *  the collapsed one-liner show "executing" (○) vs "queued" (…) from frame
+ *  one — the built-in `$ command` header never renders collapsed. */
 interface ToolClock {
 	starts: Map<string, number>;
 }
@@ -199,11 +210,16 @@ export default function minimalMode(pi: ExtensionAPI) {
 	});
 
 	/**
-	 * Live call header: collapsed, it disappears once execution starts (the
-	 * running/done one-liner in the result region owns the row). Expanded,
-	 * it stays as the built-in full-command header. pi caches the returned
-	 * component (lastComponent pattern) and does not re-invoke renderCall on
-	 * state changes — hence the draw-time checks in render().
+	 * Live call header: collapsed, the one-liner owns the row from the first
+	 * frame — queued (…) while args stream or the call awaits its turn, then
+	 * running (○) from execute() — and yields to the result one-liner on
+	 * completion. The built-in `$ command` header never renders collapsed, so
+	 * queued and slow-streaming calls no longer flash a bold header before
+	 * collapsing. callComponent is still built: the built-in renderers seed
+	 * their elapsed-time state there, so expanding mid-run keeps the true
+	 * start time. pi caches the returned component (lastComponent pattern)
+	 * and does not re-invoke renderCall on state changes — hence the
+	 * draw-time checks in render().
 	 */
 	function liveCallHeader(
 		origCall: ((args: any, theme: Theme, context: any) => any) | undefined,
@@ -232,19 +248,18 @@ export default function minimalMode(pi: ExtensionAPI) {
 						// A final result exists (executed this session or restored): the
 						// one-liner in the result region owns the row.
 						if (resultsById.has(toolCallId)) return [];
-						const startedAt = clock.starts.get(toolCallId);
-						if (startedAt !== undefined) {
-							const line = rowLine(theme, glyphs, glyphs.running, true, runningSummary, glyphs.collapsed, statusColor);
-							// Self-shell tools (edit) render outside pi's contentBox — wrap
-							// their collapsed rows in the same padded background box.
-							if (selfShell) {
-								const box = new Box(1, 1, (t: string) => theme.bg("toolPendingBg", t));
-								box.addChild(new Text(truncateToWidth(line, width), 0, 0));
-								return box.render(width);
-							}
-							return [truncateToWidth(line, width)];
+						// Queued (registered, not yet executing) or running: the
+						// one-liner owns the row from the first frame.
+						const glyph = clock.starts.has(toolCallId) ? glyphs.running : glyphs.ellipsis;
+						const line = rowLine(theme, glyphs, glyph, true, runningSummary, glyphs.collapsed, statusColor);
+						// Self-shell tools (edit) render outside pi's contentBox — wrap
+						// their collapsed rows in the same padded background box.
+						if (selfShell) {
+							const box = new Box(1, 1, (t: string) => theme.bg("toolPendingBg", t));
+							box.addChild(new Text(truncateToWidth(line, width), 0, 0));
+							return box.render(width);
 						}
-						return callComponent.render(width); // not started → built-in header
+						return [truncateToWidth(line, width)];
 					} catch (err) {
 						// Never let a header-render bug take down the whole TUI.
 						debugError(`${toolName}:live-header`, err);

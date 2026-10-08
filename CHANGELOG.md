@@ -5,6 +5,11 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Changed
+- **minimal-mode** — Collapsed rows are now one-liners from the first frame: a queued call (`… cmd ▸`) renders while args stream or the call awaits its turn, flipping to the `○` running line when execution starts. Previously the built-in `$ command` header flashed until execution began — visible on every call, and stacking into bold walls when one message queued several calls. statusColor keeps queued rows muted (nothing has happened yet). Expand-mid-run elapsed timing is unaffected: the built-in renderCall still seeds its clock state underneath.
+
 ## [0.3.22] - 2026-10-08
 
 ### Removed
