@@ -41,7 +41,6 @@ pi-agent/
 | `zai-search` | Registers `zai_web_search` — live web search via Z.AI's Web Search MCP endpoint, billed to the GLM Coding Plan quota. Zero MCP setup; key from `ZAI_API_KEY` / `/login` / `models.json`. Works with any model; pairs with pi-subagents' `researcher`/`evidence-auditor` children. Collapsed rows follow minimal-mode's one-liner convention (`✓ zai-search "query" → 10 sources ▸`); expand for the full result list. Status: `/zai-search` |
 | `status-align` | Right-aligns pi's embedded `Working` spinner/status on the editor's top border (stock is left-aligned over a busy thinking area). Version-locked to pi 0.85.x, self-disables on seam changes. Toggle with `/status-align`. Code changes need a full pi restart (same reason) |
 | `answer` | Extracts questions from last assistant message and answers them interactively via `/answer` |
-| `pi-oauth-qwen` | ~~OAuth provider for Qwen models via device code flow with PKCE~~ **Suspended** — [Qwen's free OAuth tier ended April 15, 2026](https://github.com/QwenLM/qwen-code). Code preserved for potential future reactivation. |
 
 ### Agent variants (pi-subagents)
 
