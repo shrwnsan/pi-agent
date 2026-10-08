@@ -8,6 +8,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Changed
+- **zai-search** — Queued rows (registered, not yet executing) now render `…` instead of `✓`, matching minimal-mode's collapsed-from-birth convention — a check glyph on a call that hadn't run falsely claimed success. Running (`○`) and done rows unchanged.
 - **minimal-mode** — Collapsed rows are now one-liners from the first frame: a queued call (`… cmd ▸`) renders while args stream or the call awaits its turn, flipping to the `○` running line when execution starts. Previously the built-in `$ command` header flashed until execution began — visible on every call, and stacking into bold walls when one message queued several calls. statusColor keeps queued rows muted (nothing has happened yet). Expand-mid-run elapsed timing is unaffected: the built-in renderCall still seeds its clock state underneath.
 
 ## [0.3.22] - 2026-10-08

@@ -160,7 +160,9 @@ export default function (pi: ExtensionAPI) {
 				return new Text([title, ...extras.map((e) => `  ${e}`)].join("\n"), 0, 0);
 			}
 			if (resultsDone.has(context.toolCallId)) return new Text("", 0, 0); // result row owns the line
-			const glyph = starts.has(context.toolCallId) ? glyphs.running : glyphs.check;
+			// Queued (registered, not yet executing) shows '…' — matching minimal-mode's
+			// collapsed-from-birth convention. '✓' here falsely claimed success.
+			const glyph = starts.has(context.toolCallId) ? glyphs.running : glyphs.ellipsis;
 			return new Text(truncateToWidth(rowLine(theme, glyphs, glyph, true, title, glyphs.collapsed), context.width ?? 120), 0, 0);
 		},
 		renderResult(result: AgentToolResult<any>, options: any, theme: Theme, context: any) {
