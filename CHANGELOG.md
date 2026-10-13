@@ -5,6 +5,11 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.3.25] - 2026-10-13
+
+### Added
+- **footer-path** — Worktree fleet + active-tree badge. The footer read `main` all day while subagents carried the actual work in `.worktrees/*`; now the chain shows what exists and what's moving. Fleet count: linked worktrees render as `+N⑂` after the branch (`main · +2⑂`), from `git worktree list --porcelain` — the session's own toplevel, bare entries, and detached HEADs excluded, so only worktrees holding a real branch count; glyph semantics split (`⑂`/fork = worktrees, `⎇`/git-branch = branches, ascii `wt:`/`br:`), and a worktree session collapses to one glyphed segment when dir and branch names match. Active mode (`"worktrees": "active"`): the tree where git moved most recently — reflog + index mtime, verified that worktree HEAD does NOT move on commit — wears a `⚑dir` badge while `main` stays bare (the badge accompanies the session truth, never replaces it). Freshness: snapshot at session start, filesystem watch on git's worktree metadata (FSEvents recursive watches can miss newly created subdirs) plus a 30 s reconcile bound it — neither ever runs in the render path. Also fixed a latent gitInfo bug the probe caught: gitDir vs commonDir compared as raw strings while git canonicalizes outputs (macOS `/var` → `/private/var`), making every root session on a symlinked path render a phantom `⑂.git` segment — both sides now realpath'd. `/footer-path:icon` sets the glyph tier (`unicode | nerd | ascii`, no args cycles), persists to footer-path.json, warns on `PI_GLYPHS`/`NERD_FONT` env overrides. Verified with two headless jiti harnesses — 10 checks (modes, badge follow, collapse, divergence, watcher convergence, degradation) and 16 checks (icon command) — all green.
+
 ## [0.3.23] - 2026-10-09
 
 ### Changed
