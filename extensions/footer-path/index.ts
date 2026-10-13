@@ -1,10 +1,10 @@
 /**
- * Footer Path — minimal footer: `[machine] repo · branch` + pi's stats line.
+ * Footer Path — minimal footer: `[machine] repo · branch (+N⎇ fleet)` + pi's stats line.
  *
  * Replaces pi's default footer (which starts with the absolute cwd) with a
  * compact two-line form:
  *
- *   [box] dotfiles · main                             ← line 1 (this extension)
+ *   [box] dotfiles · main +2⎇                         ← line 1 (this extension)
  *   ↑225k ↓80k R6.4M CH99.6% 11.5%/1.0M   (zai) glm… ← line 2 (replicated stats)
  *
  * Line 1 is the compact, worktree-aware path. Machine label is shown only
@@ -26,6 +26,13 @@
  * Worktrees: detected once at session start via `git rev-parse`; the name is
  * taken from the path segment after a `.worktrees/` directory when present.
  *
+ * Worktree fleet: linked worktrees of the same repo (from `git worktree list
+ * --porcelain`, excluding the session's own) render as `+N⎇` after the branch.
+ * Snapshot at session start, re-probed on branch-change events (not per render
+ * — nothing subprocess-y in the render path); worktrees created mid-session
+ * appear on the next branch change or `/footer-path` toggle. Disable with
+ * `"worktrees": "off"` in ~/.pi/agent/footer-path.json.
+ *
  * All probes (git + virtualization) run once at session start — nothing
  * subprocess-y in the render path. Branch updates come from
  * footerData.onBranchChange(). Toggle with /footer-path.
@@ -41,6 +48,7 @@ import { truncateToWidth, visibleWidth } from "@earendil-works/pi-tui";
 type MachineContext = "container" | "remote" | "vm" | "wsl";
 type GlyphTier = "unicode" | "nerd" | "ascii";
 type MachineStyle = "tag" | "dot" | "glyph" | "none";
+type WorktreeStyle = "count" | "off";
 
 interface MachineInfo {
 	label: string;
@@ -50,10 +58,12 @@ interface MachineInfo {
 interface FooterPathConfig {
 	machineStyle?: MachineStyle;
 	glyphs?: GlyphTier;
+	worktrees?: WorktreeStyle;
 }
 
 const MACHINE_STYLES: MachineStyle[] = ["tag", "dot", "glyph", "none"];
 const GLYPH_TIERS: GlyphTier[] = ["unicode", "nerd", "ascii"];
+const WORKTREE_STYLES: WorktreeStyle[] = ["count", "off"];
 
 // Font Awesome 4 PUA codepoints — \u escapes keep the source font-proof.
 const NERD_MACHINE_ICONS: Record<MachineContext, string> = {
@@ -63,6 +73,8 @@ const NERD_MACHINE_ICONS: Record<MachineContext, string> = {
 	wsl: "\uf17c", // linux/tux
 };
 const UNICODE_MACHINE_GLYPH = "▣"; // near-universal: DejaVu/Menlo/Segoe fallback
+const UNICODE_FLEET_GLYPH = "⎇"; // U+2387 branch symbol, widely cached
+const NERD_FLEET_GLYPH = "\uf126"; // Font Awesome 4 code-branch
 
 function shortHostname(): string {
 	return hostname().replace(/\.local$/, "");
@@ -138,8 +150,8 @@ function resolveTier(config: FooterPathConfig): GlyphTier {
 	return configValue(config.glyphs, GLYPH_TIERS, "unicode");
 }
 
-function gitInfo(cwd: string): { repo: string; worktree: string | null } {
-	const parts = { repo: basename(cwd), worktree: null as string | null };
+function gitInfo(cwd: string): { repo: string; worktree: string | null; toplevel: string | null } {
+	const parts = { repo: basename(cwd), worktree: null as string | null, toplevel: null as string | null };
 	try {
 		const run = (args: string[]): string => {
 			const result = spawnSync("git", args, { cwd, encoding: "utf8" });
@@ -147,6 +159,7 @@ function gitInfo(cwd: string): { repo: string; worktree: string | null } {
 		};
 		const toplevel = run(["rev-parse", "--show-toplevel"]);
 		if (!toplevel) return parts; // not a git repo — keep folder name
+		parts.toplevel = toplevel;
 		parts.repo = basename(toplevel);
 		const gitDir = resolve(cwd, run(["rev-parse", "--absolute-git-dir"]));
 		const commonDir = resolve(cwd, run(["rev-parse", "--git-common-dir"]));
@@ -159,6 +172,45 @@ function gitInfo(cwd: string): { repo: string; worktree: string | null } {
 		// git missing or unavailable — folder name is fine
 	}
 	return parts;
+}
+
+/**
+ * Branch names of the repo's OTHER linked worktrees — `git worktree list
+ * --porcelain`, excluding the session's own toplevel, bare entries, and
+ * detached HEADs (no branch to name). [] on any probe failure.
+ */
+function worktreeFleet(toplevel: string | null): string[] {
+	if (!toplevel) return [];
+	try {
+		const result = spawnSync("git", ["worktree", "list", "--porcelain"], { cwd: toplevel, encoding: "utf8" });
+		if (result.status !== 0) return [];
+		const fleet: string[] = [];
+		let path = "";
+		let isBare = false;
+		let branch: string | null = null;
+		const flush = (): void => {
+			if (path && !isBare && branch && resolve(path) !== resolve(toplevel)) fleet.push(branch);
+			path = "";
+			isBare = false;
+			branch = null;
+		};
+		for (const line of (result.stdout ?? "").split("\n")) {
+			if (line.startsWith("worktree ")) path = line.slice("worktree ".length);
+			else if (line === "bare") isBare = true;
+			else if (line === "detached") branch = null;
+			else if (line.startsWith("branch ")) branch = line.slice("branch refs/heads/".length);
+			else if (line === "") flush();
+		}
+		flush();
+		return fleet;
+	} catch {
+		return [];
+	}
+}
+
+function fleetLabel(count: number, tier: GlyphTier): string {
+	const glyph = tier === "nerd" ? NERD_FLEET_GLYPH : tier === "ascii" ? "wt" : UNICODE_FLEET_GLYPH;
+	return `+${count}${glyph}`;
 }
 
 // --- stats line (mirrors pi's built-in footer computation) ------------------
@@ -194,8 +246,10 @@ export default function footerPath(pi: ExtensionAPI) {
 		const config = loadConfig();
 		const style = configValue(config.machineStyle, MACHINE_STYLES, "tag");
 		const tier = resolveTier(config);
+		const worktreeStyle = configValue(config.worktrees, WORKTREE_STYLES, "count");
 		const machine = style === "none" ? null : machineLabel();
 		const parts = gitInfo(ctx.cwd);
+		let fleet = worktreeStyle === "off" ? [] : worktreeFleet(parts.toplevel);
 
 		const machineSegment = (theme: Theme): string | null => {
 			if (!machine) return null;
@@ -207,7 +261,15 @@ export default function footerPath(pi: ExtensionAPI) {
 		};
 
 		ctx.ui.setFooter((tui, theme, footerData) => {
-			const unsubscribe = footerData.onBranchChange(() => tui.requestRender());
+			const unsubscribe = footerData.onBranchChange(() => {
+				// Fleet snapshot refresh — rare event, sync probe OK (not render path)
+				try {
+					fleet = worktreeStyle === "off" ? [] : worktreeFleet(parts.toplevel);
+				} catch {
+					// keep previous snapshot
+				}
+				tui.requestRender();
+			});
 			return {
 				dispose: unsubscribe,
 				invalidate() {},
@@ -222,6 +284,7 @@ export default function footerPath(pi: ExtensionAPI) {
 					const sessionName = getSessionName?.call(ctx.sessionManager);
 					if (sessionName) chain.push(theme.fg("muted", sessionName));
 					if (branch) chain.push(theme.fg("accent", branch));
+					if (fleet.length > 0) chain.push(theme.fg("muted", fleetLabel(fleet.length, tier)));
 					const chainText = chain.join(theme.fg("muted", " · "));
 					const tag = machineSegment(theme);
 					const line1 =
