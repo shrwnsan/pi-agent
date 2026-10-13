@@ -4,7 +4,7 @@
  * Replaces pi's default footer (which starts with the absolute cwd) with a
  * compact two-line form:
  *
- *   [box] dotfiles · main +2⎇                         ← line 1 (this extension)
+ *   [box] dotfiles · main · +2⎇                         ← line 1 (this extension)
  *   ↑225k ↓80k R6.4M CH99.6% 11.5%/1.0M   (zai) glm… ← line 2 (replicated stats)
  *
  * Line 1 is the compact, worktree-aware path. Machine label is shown only

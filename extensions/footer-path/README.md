@@ -3,7 +3,7 @@
 Minimal footer: `[machine] repo · branch (+N⎇)` **+ pi's token stats line**, worktree-aware.
 
 ```
-[box] dotfiles · main +2⎇
+[box] dotfiles · main · +2⎇
 ↑225k ↓80k R6.4M CH99.6% 11.5%/1.0M        (zai) glm-5.3-flash • max
 ```
 
@@ -48,7 +48,7 @@ Shown **only** when this isn't the local machine — otherwise omitted:
 
 | `worktrees` | Rendered | Notes |
 |-------------|----------|-------|
-| `"count"` *(default)* | `main +2⎇` | fleet count after the branch |
+| `"count"` *(default)* | `main · +2⎇` | fleet count after the branch |
 | `"off"` | `main` | fleet suppressed entirely |
 
 `glyphs` tier — `"unicode"` (default), `"nerd"`, `"ascii"`; also settable via
@@ -64,7 +64,7 @@ branch names from `git worktree list --porcelain`, excluding the session's own
 toplevel, bare entries, and detached HEADs:
 
 ```
-dotfiles · main +2⎇        ← two other linked worktrees hold branches
+dotfiles · main · +2⎇        ← two other linked worktrees hold branches
 ```
 
 Snapshot at session start, re-probed on branch-change events (worktrees created
