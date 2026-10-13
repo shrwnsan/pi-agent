@@ -70,8 +70,8 @@ dotfiles · main +2⎇        ← two other linked worktrees hold branches
 Snapshot at session start, re-probed on branch-change events (worktrees created
 mid-session appear on the next branch change or `/footer-path` toggle — never
 per render, so the render path stays subprocess-free). Disable with
-`"worktrees": "off"` in the config below. Glyph by tier: `⎇` (unicode,
-default), Font Awesome code-branch (nerd), plain `wt` (ascii).
+`"worktrees": "off"` in the config below. Glyph by tier: Font Awesome code-branch (nerd), `⎇` (unicode default),
+plain `wt` (ascii).
 
 ## Worktrees
 
