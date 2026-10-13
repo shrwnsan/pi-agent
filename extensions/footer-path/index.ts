@@ -35,13 +35,15 @@
  *
  * All probes (git + virtualization) run once at session start — nothing
  * subprocess-y in the render path. Branch updates come from
- * footerData.onBranchChange(). Toggle with /footer-path.
+ * footerData.onBranchChange(). Toggle with /footer-path; set the glyph tier
+ * (unicode | nerd | ascii, persisted to footer-path.json) with
+ * /footer-path:icon.
  */
 
 import { spawnSync } from "node:child_process";
-import { existsSync, readFileSync } from "node:fs";
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { hostname } from "node:os";
-import { basename, join, resolve, sep } from "node:path";
+import { basename, dirname, join, resolve, sep } from "node:path";
 import type { ExtensionAPI, ExtensionContext, Theme } from "@earendil-works/pi-coding-agent";
 import { truncateToWidth, visibleWidth } from "@earendil-works/pi-tui";
 
@@ -409,6 +411,55 @@ export default function footerPath(pi: ExtensionAPI) {
 				ctx.ui.setFooter(undefined); // restore built-in footer
 			}
 			ctx.ui.notify(enabled ? "footer-path on" : "footer-path off — built-in footer restored");
+		},
+	});
+
+	pi.registerCommand("footer-path:icon", {
+		description: "Glyph tier: unicode | nerd | ascii (no args cycles)",
+		handler: async (args, ctx) => {
+			if (!ctx.hasUI) return;
+			const raw = (Array.isArray(args) ? args.join(" ") : args) ?? "";
+			const arg = raw.trim().toLowerCase().split(/\s+/)[0];
+			const config = loadConfig();
+			let tier: GlyphTier;
+			if (arg) {
+				if (!(GLYPH_TIERS as string[]).includes(arg)) {
+					ctx.ui.notify(`footer-path:icon — unknown tier '${arg}'. Tiers: ${GLYPH_TIERS.join(", ")}`, "error");
+					return;
+				}
+				tier = arg as GlyphTier;
+			} else {
+				// cycle unicode → nerd → ascii → … from the current tier
+				tier = GLYPH_TIERS[(GLYPH_TIERS.indexOf(resolveTier(config)) + 1) % GLYPH_TIERS.length];
+			}
+			// persist: merge into footer-path.json, never clobber other keys
+			try {
+				const cfgPath = join(process.env.HOME ?? "~", ".pi", "agent", "footer-path.json");
+				let existing: Record<string, unknown> = {};
+				try {
+					const parsed: unknown = JSON.parse(readFileSync(cfgPath, "utf8"));
+					if (typeof parsed === "object" && parsed !== null) existing = parsed as Record<string, unknown>;
+				} catch {
+					// fresh file
+				}
+				existing.glyphs = tier;
+				mkdirSync(dirname(cfgPath), { recursive: true });
+				writeFileSync(cfgPath, JSON.stringify(existing, null, 2) + "\n");
+			} catch {
+				ctx.ui.notify("footer-path:icon — could not write footer-path.json", "error");
+				return;
+			}
+			if (enabled) install(ctx); // re-resolve tier, re-render
+			const explicitEnv = (process.env.PI_GLYPHS ?? "").toLowerCase();
+			const envOverride =
+				(explicitEnv && (GLYPH_TIERS as string[]).includes(explicitEnv)) ||
+				["1", "true"].includes((process.env.NERD_FONT ?? "").toLowerCase());
+			const sample =
+				tier === "nerd" ? `+1${NERD_FLEET_GLYPH}` : tier === "ascii" ? "+1wt" : `+1${UNICODE_FLEET_GLYPH}`;
+			ctx.ui.notify(
+				`footer-path icon tier: ${tier} — fleet renders like ${sample}` +
+					(envOverride ? " (note: PI_GLYPHS/NERD_FONT env overrides config)" : ""),
+			);
 		},
 	});
 }

@@ -94,3 +94,11 @@ Detected once at session start (`git rev-parse --absolute-git-dir` vs
 ## Toggle
 
 `/footer-path` — toggles between this footer and pi's built-in one.
+
+`/footer-path:icon` — set the glyph tier: `unicode` | `nerd` | `ascii`, or no args
+to cycle. Persists to the `glyphs` key of `~/.pi/agent/footer-path.json` (merged,
+never clobbering sibling keys) and re-renders immediately; warns when
+`PI_GLYPHS`/`NERD_FONT` env would override the persisted tier. This is the
+eyeball-and-pick path — the only reliable oracle for "does my font have this
+glyph" is your own eyes, so sample the glyph in the notification and keep what
+renders.
