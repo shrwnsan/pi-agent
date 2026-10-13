@@ -3,7 +3,7 @@
 Minimal footer: `[machine] repo · branch (+N⎇)` **+ pi's token stats line**, worktree-aware.
 
 ```
-[box] dotfiles · main · +2⎇
+[box] dotfiles · main · +2⑂
 ↑225k ↓80k R6.4M CH99.6% 11.5%/1.0M        (zai) glm-5.3-flash • max
 ```
 
@@ -48,7 +48,8 @@ Shown **only** when this isn't the local machine — otherwise omitted:
 
 | `worktrees` | Rendered | Notes |
 |-------------|----------|-------|
-| `"count"` *(default)* | `main · +2⎇` | fleet count after the branch |
+| `"count"` *(default)* | `main · +2⑂` | fleet count after the branch |
+| `"active"` | `main · ⚑experiment · +2⑂` | count + badge on the tree where git moved last |
 | `"off"` | `main` | fleet suppressed entirely |
 
 `glyphs` tier — `"unicode"` (default), `"nerd"`, `"ascii"`; also settable via
@@ -59,28 +60,49 @@ tux (WSL) — all Font Awesome 4 codepoints, actually present in the font.
 
 ## Worktree fleet
 
-Linked worktrees of the session's repo render as `+N⎇` after the branch —
-branch names from `git worktree list --porcelain`, excluding the session's own
-toplevel, bare entries, and detached HEADs:
+Linked worktrees of the session's repo are counted after the branch —
+`git worktree list --porcelain`, excluding the session's own toplevel, bare
+entries, and detached HEADs (only worktrees holding a real branch count):
 
 ```
-dotfiles · main · +2⎇        ← two other linked worktrees hold branches
+dotfiles · main · +2⑂        ← two other linked worktrees hold branches
 ```
 
-Snapshot at session start, re-probed on branch-change events (worktrees created
-mid-session appear on the next branch change or `/footer-path` toggle — never
-per render, so the render path stays subprocess-free). Disable with
-`"worktrees": "off"` in the config below. Glyph by tier: Font Awesome code-branch (nerd), `⎇` (unicode default),
-plain `wt` (ascii).
+With `"worktrees": "active"`, the tree where git moved most recently
+(commit, checkout, reset, staging — reflog + index mtime) wears a badge:
 
-## Worktrees
+```
+dotfiles · main · ⚑experiment · +2⑂    ← main stays: it is what the session acts on
+```
+
+The root branch stays bare on purpose — the badge accompanies it, it does not
+replace it. Glyph semantics: `⑂`/fork marks worktrees, `⎇`/git-branch marks
+branches, `⚑` marks the active tree. A worktree session collapses to one
+segment when the dir name and branch name match, and shows both (each with
+its own glyph) when they diverge:
+
+```
+~/dev/pi-agent/.worktrees/experiment, branch "experiment"  →  pi-agent · ⑂experiment
+branch "feat/split" checked out at .worktrees/feat-split   →  pi-agent · ⑂feat-split · ⎇feat/split
+```
+
+Snapshot at session start; refreshed by a filesystem watch on git's worktree
+metadata plus a 30 s reconcile (FSEvents recursive watches can miss newly
+created subdirectories, and the root branch rarely changes in an
+all-worktrees workflow — neither the watch nor the interval ever runs in the
+render path). Disable with `"worktrees": "off"`. Glyph tiers: Font Awesome
+code-fork (nerd), `⑂`/`⚑` (unicode default), `wt:`/`br:`/`act:` (ascii).
+
+## Worktrees (session)
 
 Detected once at session start (`git rev-parse --absolute-git-dir` vs
-`--git-common-dir`). The name comes from the path segment after a
-`.worktrees/` directory when present:
+`--git-common-dir`, compared as real paths — git canonicalizes outputs, e.g.
+macOS `/var` → `/private/var`, and a raw string compare makes every root
+session on a symlinked path look like a worktree named `.git`). The name
+comes from the path segment after a `.worktrees/` directory when present:
 
 ```
-~/dev/pi-agent/.worktrees/experiment  →  [box] pi-agent · wt:experiment · main
+~/dev/pi-agent/.worktrees/experiment  →  [box] pi-agent · ⑂experiment · main
 ```
 
 ## Design notes

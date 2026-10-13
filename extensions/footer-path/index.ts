@@ -4,7 +4,7 @@
  * Replaces pi's default footer (which starts with the absolute cwd) with a
  * compact two-line form:
  *
- *   [box] dotfiles · main · +2⎇                         ← line 1 (this extension)
+ *   [box] dotfiles · main · +2⑂                         ← line 1 (this extension)
  *   ↑225k ↓80k R6.4M CH99.6% 11.5%/1.0M   (zai) glm… ← line 2 (replicated stats)
  *
  * Line 1 is the compact, worktree-aware path. Machine label is shown only
@@ -41,7 +41,7 @@
  */
 
 import { spawnSync } from "node:child_process";
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, readFileSync, realpathSync, statSync, watch, writeFileSync, type FSWatcher } from "node:fs";
 import { hostname } from "node:os";
 import { basename, dirname, join, resolve, sep } from "node:path";
 import type { ExtensionAPI, ExtensionContext, Theme } from "@earendil-works/pi-coding-agent";
@@ -50,7 +50,7 @@ import { truncateToWidth, visibleWidth } from "@earendil-works/pi-tui";
 type MachineContext = "container" | "remote" | "vm" | "wsl";
 type GlyphTier = "unicode" | "nerd" | "ascii";
 type MachineStyle = "tag" | "dot" | "glyph" | "none";
-type WorktreeStyle = "count" | "off";
+type WorktreeStyle = "count" | "active" | "off";
 
 interface MachineInfo {
 	label: string;
@@ -65,7 +65,7 @@ interface FooterPathConfig {
 
 const MACHINE_STYLES: MachineStyle[] = ["tag", "dot", "glyph", "none"];
 const GLYPH_TIERS: GlyphTier[] = ["unicode", "nerd", "ascii"];
-const WORKTREE_STYLES: WorktreeStyle[] = ["count", "off"];
+const WORKTREE_STYLES: WorktreeStyle[] = ["count", "active", "off"];
 
 // Font Awesome 4 PUA codepoints — \u escapes keep the source font-proof.
 const NERD_MACHINE_ICONS: Record<MachineContext, string> = {
@@ -75,8 +75,11 @@ const NERD_MACHINE_ICONS: Record<MachineContext, string> = {
 	wsl: "\uf17c", // linux/tux
 };
 const UNICODE_MACHINE_GLYPH = "▣"; // near-universal: DejaVu/Menlo/Segoe fallback
-const UNICODE_FLEET_GLYPH = "⎇"; // U+2387 branch symbol, widely cached
-const NERD_FLEET_GLYPH = "\uf126"; // Font Awesome 4 code-branch
+const UNICODE_WORKTREE_GLYPH = "⑂"; // OCR fork — the tree itself
+const NERD_WORKTREE_GLYPH = "\uf126"; // Font Awesome 4 code-fork
+const UNICODE_BRANCH_GLYPH = "⎇"; // U+2387 branch symbol, widely cached
+const NERD_BRANCH_GLYPH = "\uf418"; // git-branch
+const ACTIVE_BADGE_GLYPH = "⚑"; // U+2691 — "git moved here most recently"
 
 function shortHostname(): string {
 	return hostname().replace(/\.local$/, "");
@@ -152,8 +155,18 @@ function resolveTier(config: FooterPathConfig): GlyphTier {
 	return configValue(config.glyphs, GLYPH_TIERS, "unicode");
 }
 
-function gitInfo(cwd: string): { repo: string; worktree: string | null; toplevel: string | null } {
-	const parts = { repo: basename(cwd), worktree: null as string | null, toplevel: null as string | null };
+function gitInfo(cwd: string): {
+	repo: string;
+	worktree: string | null;
+	toplevel: string | null;
+	commonDir: string | null;
+} {
+	const parts = {
+		repo: basename(cwd),
+		worktree: null as string | null,
+		toplevel: null as string | null,
+		commonDir: null as string | null,
+	};
 	try {
 		const run = (args: string[]): string => {
 			const result = spawnSync("git", args, { cwd, encoding: "utf8" });
@@ -165,7 +178,19 @@ function gitInfo(cwd: string): { repo: string; worktree: string | null; toplevel
 		parts.repo = basename(toplevel);
 		const gitDir = resolve(cwd, run(["rev-parse", "--absolute-git-dir"]));
 		const commonDir = resolve(cwd, run(["rev-parse", "--git-common-dir"]));
-		if (gitDir && commonDir && gitDir !== commonDir) {
+		// git canonicalizes its outputs (macOS /var → /private/var) while
+		// resolve() builds from the raw cwd — compare real paths, or every
+		// root session on a symlinked tmp looks like a worktree named ".git"
+		let realGitDir = gitDir;
+		let realCommonDir = commonDir;
+		try {
+			realGitDir = realpathSync(gitDir);
+			realCommonDir = realpathSync(commonDir);
+		} catch {
+			// vanished mid-probe — string compare is the fallback
+		}
+		parts.commonDir = realCommonDir || null;
+		if (gitDir && commonDir && realGitDir !== realCommonDir) {
 			const marker = `${sep}.worktrees${sep}`;
 			const idx = cwd.lastIndexOf(marker);
 			parts.worktree = idx !== -1 ? cwd.slice(idx + marker.length).split(sep)[0] : basename(gitDir);
@@ -176,22 +201,30 @@ function gitInfo(cwd: string): { repo: string; worktree: string | null; toplevel
 	return parts;
 }
 
+interface WorktreeEntry {
+	path: string;
+	dir: string;
+	branch: string;
+}
+
 /**
- * Branch names of the repo's OTHER linked worktrees — `git worktree list
- * --porcelain`, excluding the session's own toplevel, bare entries, and
- * detached HEADs (no branch to name). [] on any probe failure.
+ * The repo's OTHER linked worktrees — `git worktree list --porcelain`,
+ * excluding the session's own toplevel, bare entries, and detached HEADs
+ * (no branch to name). [] on any probe failure.
  */
-function worktreeFleet(toplevel: string | null): string[] {
+function worktreeList(toplevel: string | null): WorktreeEntry[] {
 	if (!toplevel) return [];
 	try {
 		const result = spawnSync("git", ["worktree", "list", "--porcelain"], { cwd: toplevel, encoding: "utf8" });
 		if (result.status !== 0) return [];
-		const fleet: string[] = [];
+		const list: WorktreeEntry[] = [];
 		let path = "";
 		let isBare = false;
 		let branch: string | null = null;
 		const flush = (): void => {
-			if (path && !isBare && branch && resolve(path) !== resolve(toplevel)) fleet.push(branch);
+			if (path && !isBare && branch && resolve(path) !== resolve(toplevel)) {
+				list.push({ path, dir: basename(path), branch });
+			}
 			path = "";
 			isBare = false;
 			branch = null;
@@ -204,14 +237,51 @@ function worktreeFleet(toplevel: string | null): string[] {
 			else if (line === "") flush();
 		}
 		flush();
-		return fleet;
+		return list;
 	} catch {
 		return [];
 	}
 }
 
-function fleetLabel(count: number, tier: GlyphTier): string {
-	const glyph = tier === "nerd" ? NERD_FLEET_GLYPH : tier === "ascii" ? "wt" : UNICODE_FLEET_GLYPH;
+/**
+ * The "git moved here" signal: mtime of the worktree's reflog (commits,
+ * checkouts, resets, merges append) and index (staging) — verified on
+ * macOS: HEAD itself does NOT move on commit. 0 = nothing measurable.
+ */
+function worktreeActivity(path: string): number {
+	try {
+		const pointer = readFileSync(join(path, ".git"), "utf8").trim();
+		const gitDir = pointer.startsWith("gitdir:") ? resolve(path, pointer.slice("gitdir:".length).trim()) : "";
+		if (!gitDir) return 0;
+		let latest = 0;
+		for (const file of ["logs/HEAD", "index"]) {
+			try {
+				latest = Math.max(latest, statSync(join(gitDir, file)).mtimeMs);
+			} catch {
+				// absent file — skip
+			}
+		}
+		return latest;
+	} catch {
+		return 0;
+	}
+}
+
+function mostRecentlyActive(list: WorktreeEntry[]): WorktreeEntry | null {
+	let best: WorktreeEntry | null = null;
+	let bestTime = -1;
+	for (const entry of list) {
+		const time = worktreeActivity(entry.path);
+		if (time > bestTime) {
+			bestTime = time;
+			best = entry;
+		}
+	}
+	return bestTime > 0 ? best : null;
+}
+
+function fleetCountLabel(count: number, tier: GlyphTier): string {
+	const glyph = tier === "nerd" ? NERD_WORKTREE_GLYPH : tier === "ascii" ? "wt" : UNICODE_WORKTREE_GLYPH;
 	return `+${count}${glyph}`;
 }
 
@@ -251,7 +321,19 @@ export default function footerPath(pi: ExtensionAPI) {
 		const worktreeStyle = configValue(config.worktrees, WORKTREE_STYLES, "count");
 		const machine = style === "none" ? null : machineLabel();
 		const parts = gitInfo(ctx.cwd);
-		let fleet = worktreeStyle === "off" ? [] : worktreeFleet(parts.toplevel);
+		let fleet: WorktreeEntry[] = worktreeStyle === "off" ? [] : worktreeList(parts.toplevel);
+		let active: WorktreeEntry | null =
+			worktreeStyle === "active" ? mostRecentlyActive(fleet) : null;
+		let watcher: FSWatcher | null = null;
+		const reprobe = (): void => {
+			if (worktreeStyle === "off") return;
+			try {
+				fleet = worktreeList(parts.toplevel);
+				active = worktreeStyle === "active" ? mostRecentlyActive(fleet) : null;
+			} catch {
+				// keep previous snapshot
+			}
+		};
 
 		const machineSegment = (theme: Theme): string | null => {
 			if (!machine) return null;
@@ -263,30 +345,88 @@ export default function footerPath(pi: ExtensionAPI) {
 		};
 
 		ctx.ui.setFooter((tui, theme, footerData) => {
-			const unsubscribe = footerData.onBranchChange(() => {
-				// Fleet snapshot refresh — rare event, sync probe OK (not render path)
+			// Fleet + activity refresh — the root branch rarely changes in an
+			// all-worktrees workflow, so a filesystem watch on git's worktree
+			// metadata (commits/checkouts/staging append to per-worktree reflog
+			// + index) is what keeps the snapshot honest. Debounced; on watch
+			// failure the session-start snapshot stays.
+			let debounce: ReturnType<typeof setTimeout> | null = null;
+			let disposed = false;
+			const scheduleReprobe = (): void => {
+				if (disposed) return;
+				if (debounce) clearTimeout(debounce);
+				debounce = setTimeout(() => {
+					debounce = null;
+					if (disposed) return;
+					reprobe();
+					tui.requestRender();
+				}, 300);
+			};
+			// FSEvents recursive watches can miss newly CREATED subdirs (git
+			// worktree add), so a slow reconcile bounds that blind spot.
+			let reconcile: ReturnType<typeof setInterval> | null = null;
+			if (worktreeStyle !== "off" && parts.toplevel) {
+				reconcile = setInterval(() => {
+					if (!disposed) {
+						reprobe();
+						tui.requestRender();
+					}
+				}, 30_000);
+			}
+			if (worktreeStyle !== "off" && parts.commonDir) {
 				try {
-					fleet = worktreeStyle === "off" ? [] : worktreeFleet(parts.toplevel);
+					const wtMetaDir = join(parts.commonDir, "worktrees");
+					if (existsSync(wtMetaDir)) {
+						watcher = watch(wtMetaDir, { recursive: true }, scheduleReprobe);
+						watcher.on("error", () => {}); // snapshot stays
+					}
 				} catch {
-					// keep previous snapshot
+					// no watch — snapshot from session start
 				}
+			}
+			const unsubscribe = footerData.onBranchChange(() => {
+				reprobe();
 				tui.requestRender();
 			});
 			return {
-				dispose: unsubscribe,
+				dispose: () => {
+					disposed = true;
+					if (debounce) clearTimeout(debounce);
+					clearInterval(reconcile);
+					watcher?.close();
+					unsubscribe();
+				},
 				invalidate() {},
 				render(width: number): string[] {
 					const branch = footerData.getGitBranch();
 
-					// Line 1 — compact path
+					// Line 1 — compact path. Root branch stays bare (clean); a
+					// worktree session wears the worktree glyph and collapses to
+					// one segment when dir name and branch name match.
 					const chain: string[] = [parts.repo];
-					if (parts.worktree) chain.push(theme.fg("muted", `wt:${parts.worktree}`));
+					const wtPrefix = tier === "nerd" ? NERD_WORKTREE_GLYPH : tier === "ascii" ? "wt:" : UNICODE_WORKTREE_GLYPH;
+					const brPrefix = tier === "nerd" ? NERD_BRANCH_GLYPH : tier === "ascii" ? "br:" : UNICODE_BRANCH_GLYPH;
+					const branchIsDir =
+						!!branch && !!parts.worktree && (branch === parts.worktree || branch.replace(/\//g, "-") === parts.worktree);
+					if (parts.worktree) {
+						if (branchIsDir) {
+							chain.push(theme.fg("accent", `${wtPrefix}${branch}`));
+						} else {
+							chain.push(theme.fg("muted", `${wtPrefix}${parts.worktree}`));
+							if (branch) chain.push(theme.fg("accent", `${brPrefix}${branch}`));
+						}
+					} else if (branch) {
+						chain.push(theme.fg("accent", branch));
+					}
 					const getSessionName = (ctx.sessionManager as { getSessionName?: () => string | undefined })
 						.getSessionName;
 					const sessionName = getSessionName?.call(ctx.sessionManager);
 					if (sessionName) chain.push(theme.fg("muted", sessionName));
-					if (branch) chain.push(theme.fg("accent", branch));
-					if (fleet.length > 0) chain.push(theme.fg("muted", fleetLabel(fleet.length, tier)));
+					if (active && worktreeStyle === "active") {
+						const badge = tier === "ascii" ? `act:${active.dir}` : `${ACTIVE_BADGE_GLYPH}${active.dir}`;
+						chain.push(theme.fg("muted", badge));
+					}
+					if (fleet.length > 0) chain.push(theme.fg("muted", fleetCountLabel(fleet.length, tier)));
 					const chainText = chain.join(theme.fg("muted", " · "));
 					const tag = machineSegment(theme);
 					const line1 =
@@ -455,7 +595,7 @@ export default function footerPath(pi: ExtensionAPI) {
 				(explicitEnv && (GLYPH_TIERS as string[]).includes(explicitEnv)) ||
 				["1", "true"].includes((process.env.NERD_FONT ?? "").toLowerCase());
 			const sample =
-				tier === "nerd" ? `+1${NERD_FLEET_GLYPH}` : tier === "ascii" ? "+1wt" : `+1${UNICODE_FLEET_GLYPH}`;
+				tier === "nerd" ? `+1${NERD_WORKTREE_GLYPH}` : tier === "ascii" ? "+1wt" : `+1${UNICODE_WORKTREE_GLYPH}`;
 			ctx.ui.notify(
 				`footer-path icon tier: ${tier} — fleet renders like ${sample}` +
 					(envOverride ? " (note: PI_GLYPHS/NERD_FONT env overrides config)" : ""),
