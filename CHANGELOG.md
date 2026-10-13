@@ -5,18 +5,16 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-<<<<<<< HEAD
-## [0.3.24] - 2026-10-13
+## [0.3.26] - 2026-10-13
 
 ### Added
 - **session-summary** — New extension, forked from pasky/pi-session-summary 1.0.2 (MIT): a one-line LLM session summary set as the session name, so `/resume` and the status bar show what the session is about instead of the first user prompt. Fork changes: (1) a decision-model gate (`decision-gate.ts`) that decides materiality before spending a summarizer call — a unified provider registry (`decisionGate.specs` pre-seeded with built-in presets: Liquid d1:free, TypeSafe Jev, Vercel AI Gateway YES/NO chat shim; customs merge over them, so adding a decision model is one specs entry + one env var, keyless for local endpoints). The chain cycles active providers in `decisionGate.providers` order with per-provider timeout overrides and 3-strike session disable; no active provider degrades silently to stock behavior. Confident no-op turns skip the LLM entirely (names stop churning), topic drift escalates to a full re-summarize; (2) incremental prompts now embed only the delta since the last summary (upstream embedded the full conversation in both prompt shapes); (3) resume no longer spikes a full re-summarize on the first post-resume turn (upstream reset the covered-token baseline to 0 on session start); (4) manual `/name` is never overwritten until `/summary:clear`. Commands: `/summary:settings`, `/summary:update`, `/summary:clear`, `/summary:cost` (now counts gate calls), `/summary:gate` (provider readiness in cycle order + dry-run verdict), `/summary:lock` (toggle: freeze the current summary without renaming; per pi-instance — restart/reload resumes auto). Zero-config summarizer resolution: pin (`provider` + `model`, pi-title-style `:effort` suffix — `zai/glm-5.3-flash:high` — default effort minimal) → cheap-model ladder → the session's own model (inherit: always has a working key, prompt never leaves providers already in use); `/summary:settings` materializes everything except the inherit rung (stays dynamic). First-run whisper: one toast per pi process when the first summary lands. Upstream's no-model error is now actionable, and a gate crash degrades to stock behavior instead of stalling summaries.
-||||||| ccb7cf0
-=======
+
+
 ## [0.3.25] - 2026-10-13
 
 ### Added
 - **footer-path** — Worktree fleet + active-tree badge. The footer read `main` all day while subagents carried the actual work in `.worktrees/*`; now the chain shows what exists and what's moving. Fleet count: linked worktrees render as `+N⑂` after the branch (`main · +2⑂`), from `git worktree list --porcelain` — the session's own toplevel, bare entries, and detached HEADs excluded, so only worktrees holding a real branch count; glyph semantics split (`⑂`/fork = worktrees, `⎇`/git-branch = branches, ascii `wt:`/`br:`), and a worktree session collapses to one glyphed segment when dir and branch names match. Active mode (`"worktrees": "active"`): the tree where git moved most recently — reflog + index mtime, verified that worktree HEAD does NOT move on commit — wears a `⚑dir` badge while `main` stays bare (the badge accompanies the session truth, never replaces it). Freshness: snapshot at session start, filesystem watch on git's worktree metadata (FSEvents recursive watches can miss newly created subdirs) plus a 30 s reconcile bound it — neither ever runs in the render path. Also fixed a latent gitInfo bug the probe caught: gitDir vs commonDir compared as raw strings while git canonicalizes outputs (macOS `/var` → `/private/var`), making every root session on a symlinked path render a phantom `⑂.git` segment — both sides now realpath'd. `/footer-path:icon` sets the glyph tier (`unicode | nerd | ascii`, no args cycles), persists to footer-path.json, warns on `PI_GLYPHS`/`NERD_FONT` env overrides. Verified with two headless jiti harnesses — 10 checks (modes, badge follow, collapse, divergence, watcher convergence, degradation) and 16 checks (icon command) — all green.
->>>>>>> origin/main
 
 ## [0.3.23] - 2026-10-09
 

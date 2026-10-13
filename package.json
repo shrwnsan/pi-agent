@@ -1,12 +1,6 @@
 {
   "name": "pi-agent",
-<<<<<<< HEAD
-  "version": "0.3.24",
-||||||| ccb7cf0
-  "version": "0.3.23",
-=======
-  "version": "0.3.25",
->>>>>>> origin/main
+  "version": "0.3.26",
   "private": true,
   "description": "Personal pi extensions, themes, skills, and prompts",
   "license": "MIT",
