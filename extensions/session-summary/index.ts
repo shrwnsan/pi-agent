@@ -76,7 +76,7 @@ interface SummaryConfig {
 	debounceSeconds: number;
 	maxTokens: number;
 	resummarizeTokenThreshold: number;
-	showWidget: boolean;
+	debugWidget: boolean;
 	verbose: boolean;
 	decisionGate: DecisionGateConfig;
 }
@@ -85,7 +85,7 @@ const DEFAULTS: SummaryConfig = {
 	debounceSeconds: 60,
 	maxTokens: 300,
 	resummarizeTokenThreshold: 40_000,
-	showWidget: false,
+	debugWidget: false,
 	verbose: false,
 	decisionGate: resolveGateConfig(),
 };
@@ -362,7 +362,7 @@ export default function sessionSummaryExtension(pi: ExtensionAPI) {
 			errorNotified = true;
 			ctx.ui.notify(`[session-summary] ${resolvedModelName || "(no model)"}: ${lastError}`, "warning");
 		}
-		if (!config.showWidget) {
+		if (!config.debugWidget) {
 			ctx.ui.setWidget("session-summary", undefined);
 			return;
 		}
