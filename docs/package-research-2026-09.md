@@ -338,8 +338,8 @@ One trigger alone → document it here and wait.
 
 Status legend: ⬜ pending · 🔄 in test · ✅ shipped · 💤 dormant.
 
-**Phase 0 — today.** ⬜ `pi install npm:pi-subagents npm:pi-btw`; pin exact versions
-in `~/.pi/agent/settings.json`; apply hardening keys (`agentScope: "user"`,
+**Phase 0 — today.** ⬜ `pi install npm:pi-subagents npm:pi-btw`; ✅ pin exact versions
+in `~/.pi/agent/settings.json` (2026-10-15 — all five third-party packages, §11.3); apply hardening keys (`agentScope: "user"`,
 `scheduledRuns.enabled: false`); 2-week trial.
 
 **Phase 1 — this week.** ✅ `zai-search` in this repo (`extensions/zai-search/`):
@@ -375,6 +375,10 @@ On every version bump: re-run the §9.1 greps (fetch/telemetry/endpoints), read
 the changelog for new exec surfaces or config keys, confirm findings 1–2's
 config keys still hold. Documented ~30-minute job; skip only for patch bumps
 with boring changelogs.
+
+**Pin state (2026-10-15):** all third-party extensions pin exact versions
+(§11.3) — updates no longer auto-float via `@latest`. This ritual now triggers
+deliberately, on the manual bump, instead of silently on every `pi update`.
 
 ### 10.5 Phase 2.5 — QoL polish (own-repo extensions)
 
@@ -521,12 +525,14 @@ thinking settings isolated where noted).
   `.pi/settings.json` remains the alternative where delegation is the default.
 - pi-web-access installed globally for fetch/verify legs of the zai-hybrid
   agent variants (researcher-zai / evidence-auditor-zai via agentScanDirs).
-- **Package pins** (policy, 2026-09-20): npm entries in settings.json are
-  version-pinned to the audited set (`pi-subagents@0.70.1`, `pi-btw@0.5.0`,
-  `pi-web-access@0.30.0`) — pins are how a fresh machine (dotfiles
-  `bin/pi-bootstrap`, guide-026) reproduces this exact stack. Any bump runs
-  the §10.4 ritual first, then moves the pin in one commit. If pi rewrites
-  settings without pins, restore them before committing.
+- **Package pins** (policy, 2026-09-20; audited set 2026-10-15): npm entries in
+  settings.json are version-pinned — `pi-subagents@0.78.0`, `pi-btw@0.8.0`,
+  `pi-web-access@0.40.0`, `pi-agent-browser-native@0.9.6`, `@pi-lab/env@1.0.5` —
+  pins are how a fresh machine (dotfiles `bin/pi-bootstrap`, guide-026)
+  reproduces this exact stack. Any bump runs the §10.4 ritual first, then moves
+  the pin in one commit. If pi rewrites settings without pins, restore them
+  before committing. Shrwnsan-owned packages stay ref-tracked (pi-agent@main,
+  pi-list-extensions@dev).
 
 ### 11.4 pi-five trigger scorecard
 
