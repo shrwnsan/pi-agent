@@ -5,6 +5,12 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.3.28] - 2026-10-15
+
+### Changed
+- **session-summary** — `showWidget` config key renamed to **`debugWidget`** (release bookkeeping for #28, which shipped without an entry or bump — the old key is silently ignored; `"debugWidget": true` restores the below-editor status line).
+- **footer-path** — session-name footer segment is now **opt-in**: `"showSessionName": true` in `~/.pi/agent/footer-path.json` (default false). Session summaries live in `/resume` and the native name slot, so the footer no longer duplicates them by default.
+
 ## [0.3.27] - 2026-10-13
 
 ### Fixed
