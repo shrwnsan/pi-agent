@@ -55,6 +55,9 @@ owns structure and per-extension descriptions; this file is about changing thing
 ## Commits & docs
 
 - Subjects: `type(scope): summary` or `<ext> vX.Y.Z: summary` — both established.
+- Releases: PR (squash-only repo) → tag the squash commit on main:
+  `git tag -a vX.Y.Z <commit> -m "<one-line release summary>" && git push origin vX.Y.Z`.
+  Annotated, v-prefixed, one per CHANGELOG release; skipped numbers (0.3.24) get no tag.
 - docs/ is load-bearing: its § numbers are cited from README and CHANGELOG. Trial and
   friction logs are append-only; retired work gets a RETIRED marker, not deletion.
 - Deep context: `docs/package-research-2026-09.md` (§10.4 update ritual, boot costs,
