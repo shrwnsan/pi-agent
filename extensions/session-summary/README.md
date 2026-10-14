@@ -100,6 +100,8 @@ Pin → cheap-model ladder → **inherit**:
    `low`, `medium`, `high`.
 2. **Ladder** — cheap external models, first with a working key:
    Codex-subscription luna → gpt nano/mini → Gemini flash-lite → Haiku.
+   A 401/403 (region-blocked or rejected key) skips the whole provider for
+   the session — one wasted attempt, not one per sibling model.
 3. **Inherit** — the session's own model. Always succeeds on a live session
    (its key demonstrably works) and the prompt never goes anywhere the
    conversation hasn't already been. This is what makes zero-config installs

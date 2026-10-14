@@ -1,5 +1,5 @@
 /**
- * session-summary v1.2.0 (pi-agent fork) — maintains a one-line LLM-generated
+ * session-summary v1.2.1 (pi-agent fork) — maintains a one-line LLM-generated
  * session summary as the session name, so it shows up in pi's status bar and
  * the /resume session list instead of the truncated first user message.
  *
@@ -34,7 +34,9 @@
  *      the session's own model (inherit) — zero-config machines get working
  *      summaries with the prompt never leaving providers it already uses.
  *      Pins accept pi-title-style `:effort` suffixes (provider/model:high);
- *      default effort is minimal.
+ *      default effort is minimal. Ladder walk-out: 401/403 provider errors
+ *      (v1.2.1 — e.g. region-blocked keys) reject the whole provider for the
+ *      session instead of burning one attempt per sibling model.
  *   7. /summary:lock (v1.2.0) — toggle: freeze the current summary without
  *      renaming; auto-updates stop for the session, next turn after unlock
  *      reconciles the gap. Per-instance: restart/reload resumes auto.
@@ -242,6 +244,7 @@ export default function sessionSummaryExtension(pi: ExtensionAPI) {
 	let lastError = "";            // last error (code only)
 	let errorNotified = false;     // has the user been told about the current failure streak?
 	const rejectedModels = new Set<string>(); // provider/id that returned a provider error this session
+	const rejectedProviders = new Set<string>(); // providers with fatal errors (401/403) — all their models fail identically
 	let latestCtx: ExtensionContext | undefined; // most recent ctx for widget updates
 
 	// Fork state
@@ -289,6 +292,7 @@ export default function sessionSummaryExtension(pi: ExtensionAPI) {
 		lastError = "";
 		errorNotified = false;
 		rejectedModels.clear();
+		rejectedProviders.clear();
 		resolvedModelName = "";
 		totalCost = { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 };
 		totalTokens = { input: 0, output: 0 };
@@ -317,7 +321,8 @@ export default function sessionSummaryExtension(pi: ExtensionAPI) {
 		// Models that already failed with a provider error this session are skipped so one
 		// broken/exhausted provider doesn't monopolize every attempt.
 		const all = ctx.modelRegistry.getAvailable()
-			.filter((m) => !rejectedModels.has(`${m.provider}/${m.id}`));
+			.filter((m) => !rejectedModels.has(`${m.provider}/${m.id}`))
+			.filter((m) => !rejectedProviders.has(m.provider));
 		const generic = all.filter((m) => !AUTO_DETECT_SKIP_PROVIDERS.has(m.provider));
 		for (const candidate of AUTO_DETECT_MODELS) {
 			const slash = candidate.indexOf("/");
@@ -563,19 +568,30 @@ export default function sessionSummaryExtension(pi: ExtensionAPI) {
 				// Handle provider-level errors (e.g. codex "invalid_workspace_selected")
 				if (response.stopReason === "error") {
 					const errMsg = response.errorMessage || "unknown provider error";
-					// Try to extract a short code/message from JSON error responses
+					// Extract a short code from JSON error responses. Providers prefix the
+					// payload ("OpenAI API error (403): {…}") — parse the embedded JSON,
+					// not the whole string.
 					let code = errMsg;
 					try {
-						const parsed = JSON.parse(errMsg);
-						code = parsed?.detail?.code
+						const jsonStart = errMsg.indexOf("{");
+						const parsed = jsonStart >= 0 ? JSON.parse(errMsg.slice(jsonStart)) : null;
+						code = (parsed && (parsed.code
+							|| parsed?.detail?.code
 							|| parsed?.error?.code
 							|| parsed?.error?.message
-							|| (typeof parsed?.detail === "string" ? parsed.detail : null)
-							|| errMsg;
+							|| (typeof parsed?.detail === "string" ? parsed.detail : null))) || errMsg;
 					} catch {}
-					lastError = String(code);
+					lastError = String(code).slice(0, 80);
 					// Only auto-detected models get rejected; an explicitly configured model is the user's call.
-					if (!(config.provider && config.model)) rejectedModels.add(`${model.provider}/${model.id}`);
+					if (!(config.provider && config.model)) {
+						rejectedModels.add(`${model.provider}/${model.id}`);
+						// Fatal provider errors — auth/region (HTTP 401/403): every model
+						// from that provider fails identically, so skip the whole provider,
+						// not just this model. Transient errors (429/5xx) stay model-scoped.
+						if (/\(40[13]\)/.test(errMsg) || code === "unsupported_country_region_territory") {
+							rejectedProviders.add(model.provider);
+						}
+					}
 					return; // don't update summary
 				}
 
