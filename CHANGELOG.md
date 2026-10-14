@@ -5,6 +5,11 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.3.27] - 2026-10-13
+
+### Fixed
+- **session-summary** — Ladder walk-out on fatal provider errors: a 401/403 (region-blocked or rejected key) now rejects the **whole provider** for the session instead of burning one failed attempt per sibling ladder model — on machines with an unusable OpenAI key, the next gated turn reaches the inherit rung directly. Provider-level rejection never applies to explicit pins (a pinned model failing is the user's call to fix). Error extraction now parses the JSON payload embedded in provider messages ("OpenAI API error (403): {…}" previously leaked the whole prefixed string into the warning) and handles top-level `code` fields — warnings now read `unsupported_country_region_territory`, not a JSON blob.
+
 ## [0.3.26] - 2026-10-13
 
 ### Added
