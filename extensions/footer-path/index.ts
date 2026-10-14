@@ -61,6 +61,8 @@ interface FooterPathConfig {
 	machineStyle?: MachineStyle;
 	glyphs?: GlyphTier;
 	worktrees?: WorktreeStyle;
+	/** Opt-in: append the session name (summary) to the footer chain. Default false. */
+	showSessionName?: boolean;
 }
 
 const MACHINE_STYLES: MachineStyle[] = ["tag", "dot", "glyph", "none"];
@@ -420,7 +422,7 @@ export default function footerPath(pi: ExtensionAPI) {
 					}
 					const getSessionName = (ctx.sessionManager as { getSessionName?: () => string | undefined })
 						.getSessionName;
-					const sessionName = getSessionName?.call(ctx.sessionManager);
+					const sessionName = config.showSessionName === true ? getSessionName?.call(ctx.sessionManager) : undefined;
 					if (sessionName) chain.push(theme.fg("muted", sessionName));
 					if (active && worktreeStyle === "active") {
 						const badge = tier === "ascii" ? `act:${active.dir}` : `${ACTIVE_BADGE_GLYPH}${active.dir}`;

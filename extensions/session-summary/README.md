@@ -139,7 +139,7 @@ renames also survive the race against an in-flight summary call.
   "debounceSeconds": 60,
   "maxTokens": 300,
   "resummarizeTokenThreshold": 40000,
-  "showWidget": false,
+  "debugWidget": false,   // opt-in live line below the editor (staleness, errors)
   "verbose": false,          // notify on gate decisions and summary updates
   "decisionGate": {
     "enabled": true,
