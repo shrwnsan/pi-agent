@@ -5,6 +5,11 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.3.29] - 2026-10-21
+
+### Added
+- **working-pet** — replaces pi's braille working spinner with pixel runner pets (`dino`/`mario`/`jogger`) on the supported `setWorkingIndicator` seam; `/working-pet` cycles, `braille` restores stock. Experimental `big` mode renders a monochrome dino stage widget above the prompt bar while pi works (sprite fidelity vs the trex-runner reference still WIP).
+
 ## [0.3.28] - 2026-10-15
 
 ### Changed
