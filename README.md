@@ -68,3 +68,4 @@ Additional directories to add as needed:
 - Third-party packages (e.g., `pi-answer`, `pi-list-extensions`) are installed independently and are **not** bundled here.
 - Extension packages are **version-pinned** in the owner's settings.json (audited set — see `docs/package-research-2026-09.md` §11.3); bumps run the §10.4 update ritual first.
 - `npm/pi-five/` is a dormant name-reservation placeholder (0.0.1-alpha.1 on npm) — build is trigger-gated, see `docs/package-research-2026-09.md` §10.2 and the trial log `docs/trial-2026-09-friction.md`.
+- MIT — see [LICENSE](LICENSE). Extensions ported from other projects (e.g., `session-summary` ← pasky/pi-session-summary, `zai-search` ← @estebanforge/pi-glm-tweaks) credit their origin and retain upstream MIT notices in their source headers.
