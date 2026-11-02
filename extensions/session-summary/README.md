@@ -205,8 +205,10 @@ plus a short `error` code.
 itself. The summary lives in pi's session file under the same session id —
 join there if you need names.
 
-Rollups: `/summary:cost project` (this project's cwd) and `/summary:cost
-lifetime` (everything). Plain `/summary:cost` stays the in-memory current-
+Summary lines also carry `effort` — the actual (post-clamp) reasoning effort
+sent. Rollups group LLM providers by `provider:effort`; gate lines stay keyed
+by provider. Rollups: `/summary:cost project` (this project's cwd, shown
+as `~/...`) and `/summary:cost lifetime` (everything). Plain `/summary:cost` stays the in-memory current-
 session view and works with telemetry off. To inspect raw lines:
 
 ```sh

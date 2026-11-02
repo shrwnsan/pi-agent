@@ -21,6 +21,7 @@
  */
 import { appendFileSync, mkdirSync, readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
+import { homedir } from "node:os";
 import { getAgentDir } from "@earendil-works/pi-coding-agent";
 
 // -- Configuration --------------------------------------------------------
@@ -53,6 +54,8 @@ export interface TelemetryBase {
 export interface SummaryEventData {
 	update: "full" | "incremental";
 	provider: string;
+	/** Actual (post-clamp) reasoning effort sent to the model. */
+	effort?: string;
 	outcome: "ok" | "error";
 	error?: string;
 	inputTokens?: number;
@@ -85,6 +88,13 @@ export function emitTelemetry(
 	} catch {
 		// Telemetry must never break the extension.
 	}
+}
+
+/** Display helper: $HOME → ~. Pure string op on render only — the log keeps
+ *  absolute paths so rollup filters never break across path representations. */
+export function tildify(p: string): string {
+	const home = homedir();
+	return p === home || p.startsWith(home + "/") ? "~" + p.slice(home.length) : p;
 }
 
 // -- Rollups ---------------------------------------------------------------
@@ -148,7 +158,10 @@ export function readRollup(config: TelemetryConfig, filter?: { project?: string 
 			if (!rollup.last || e.ts > rollup.last) rollup.last = e.ts;
 		}
 		const provider = typeof e.provider === "string" ? e.provider : "(unknown)";
-		const stats = rollup.byProvider.get(provider) ?? { calls: 0, cost: 0, costUnknown: 0, inputTokens: 0, outputTokens: 0 };
+		// Summary events group by provider:effort — a different effort is a
+		// different effective configuration. Gate events have no effort.
+		const effort = e.kind === "summary" && typeof e.effort === "string" && e.effort ? ":" + e.effort : "";
+		const stats = rollup.byProvider.get(provider + effort) ?? { calls: 0, cost: 0, costUnknown: 0, inputTokens: 0, outputTokens: 0 };
 		stats.calls++;
 
 		if (e.outcome === "error") rollup.errors++;
@@ -174,7 +187,7 @@ export function readRollup(config: TelemetryConfig, filter?: { project?: string 
 			rollup.gateCalls++;
 			if (e.decision === "skip") rollup.gateSkips++;
 		}
-		rollup.byProvider.set(provider, stats);
+		rollup.byProvider.set(provider + effort, stats);
 	}
 	return rollup;
 }

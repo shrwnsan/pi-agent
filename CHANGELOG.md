@@ -5,6 +5,11 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.3.32] - 2026-11-02
+
+### Changed
+- **session-summary v1.3.3.** Summary telemetry events now record the actual (post-clamp) reasoning effort sent to the model (`effort` field), and `/summary:cost project|lifetime` provider rows group LLM calls by `provider:effort` (e.g. `zai/glm-5.3-flash:low`) — a different effective effort is a different configuration. The `project` label renders tildified (`~/Developer/...`) as a pure display-time string op; the log keeps absolute paths so rollup filters stay canonical. Backward compatible: pre-effort lines group under their bare provider name.
+
 ## [0.3.31] - 2026-11-02
 
 ### Fixed
