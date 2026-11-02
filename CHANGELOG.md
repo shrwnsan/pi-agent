@@ -5,6 +5,11 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.3.29] - 2026-10-15
+
+### Changed
+- **session-summary v1.3.0.** Fix pass plus two opt-ins. *Fixes:* project config now layers over global (a project `.pi/session-summary.json` used to reset `decisionGate` customization — custom specs, provider order, `enabled` — back to presets whenever the file lacked a full gate section); self-written session names are sanitized with pi's exact `appendSessionInfo` rule before comparison, so a stray `\r` in model output can no longer trip the manual-name guard and silently freeze auto-naming; full rebuilds embed the compaction summary (up to 2k chars) so post-compaction re-summarizes stop forgetting pre-compaction work — `buildConversation` never saw `CompactionEntry`, and the role-`compactionSummary` message branch was dead code; `/summary:update` now reports a locked summary instead of silently doing nothing; a gate skip resets the widget's `[N turns ago]` counter (the summary is deliberately current, not stale); empty or unrenderable deltas are consumed instead of escalating to a full-conversation rebuild. *Headless opt-in:* scripted sessions (`pi -p`, JSON mode) no longer spend gate/summarizer calls by default — their names are rarely seen and the write races teardown; `"runHeadless": true` opts back in; interactive modes (`tui`, `rpc`) unaffected. *Opt-in local usage log:* `"telemetry": { "enabled": true }` appends one metadata line per summarizer/gate attempt to `~/.pi/agent/session-summary/usage.jsonl` (JSONL, created `0600`, default off, never networked, never project-local): when, which session/project, provider/model, outcome, tokens, cost, gate verdict + probability. Never conversation content, prompts, or summary text. `/summary:cost project` and `/summary:cost lifetime` roll the log up (plain `/summary:cost` stays the in-memory session view); gate cost is reported as unknown where the endpoint returns no usage rather than guessed.
+
 ## [0.3.28] - 2026-10-15
 
 ### Changed
