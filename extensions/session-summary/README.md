@@ -87,7 +87,7 @@ re-enables auto-naming); `/summary:cost` counts gate calls.
 | `/summary:settings` | Create `~/.pi/agent/session-summary.json` with defaults; edit + `/reload` |
 | `/summary:update` | Force a full summary update now (bypasses gate and debounce) |
 | `/summary:clear` | Reset the summary and name (also re-enables auto-naming) |
-| `/summary:cost` | Summary model, LLM + gate call counts, token/cost breakdown |
+| `/summary:cost` | Summary model, LLM + gate call counts, token/cost breakdown. With telemetry on: `/summary:cost project` and `/summary:cost lifetime` roll up the local usage log |
 | `/summary:gate` | Gate provider readiness in cycle order + dry-run a verdict |
 | `/summary:lock` | Toggle: freeze the current summary without renaming — auto-updates off for the session; run again to resume |
 
@@ -141,6 +141,11 @@ renames also survive the race against an in-flight summary call.
   "resummarizeTokenThreshold": 40000,
   "debugWidget": false,   // opt-in live line below the editor (staleness, errors)
   "verbose": false,          // notify on gate decisions and summary updates
+  "runHeadless": false,      // also run in scripted sessions (pi -p, JSON mode) — default off
+  "telemetry": {
+    "enabled": false,        // opt-in local usage log, see "Local usage log"
+    "path": ""               // optional override; default ~/.pi/agent/session-summary/usage.jsonl
+  },
   "decisionGate": {
     "enabled": true,
     "providers": ["liquid", "typesafe", "vercel"],
@@ -154,8 +159,54 @@ renames also survive the race against an in-flight summary call.
 
 See the provider-registry example above for `specs` entries.
 
+Project config (`.pi/session-summary.json`) **layers over** global: scalars
+override, and partial `decisionGate`/`telemetry` objects merge with the global
+ones instead of replacing them.
+
+## Headless (scripted) sessions
+
+By default the extension only spends calls in interactive sessions (`tui`,
+`rpc`). Scripted runs — `pi -p` one-shots, JSON mode, subagent delegations —
+skip the gate and summarizer entirely: their names are rarely seen, and the
+name write races teardown anyway. To name scripted sessions too, set
+`"runHeadless": true`.
+
 ## Summarizer model
 
 See "Summarizer resolution" above — the ladder is rung 2 of 3, inherit is the
 zero-config default. Pin `provider`/`model` for explicit control (e.g. a GLM
 flash-class model), with `:effort` for reasoning effort.
+
+## Local usage log (opt-in)
+
+`"telemetry": { "enabled": true }` appends one JSONL line per summarizer or
+gate attempt to `~/.pi/agent/session-summary/usage.jsonl` (created `0600`;
+`telemetry.path` overrides). Default **off**, always local, nothing networked.
+
+What a line contains — metadata only:
+
+```jsonc
+{ "v": 1, "ts": "2026-10-15T12:00:00.000Z", "kind": "summary",
+  "session": "<pi session id>", "project": "/path/to/project", "mode": "tui",
+  "update": "incremental", "provider": "openai/gpt-5.4-nano", "outcome": "ok",
+  "inputTokens": 1200, "outputTokens": 30, "cost": 0.0002, "ms": 900 }
+```
+
+Gate lines swap `update` for `decision` (`skip` / `summarize` /
+`resummarize-full`) and add `materialP`. Error lines carry `outcome: "error"`
+plus a short `error` code.
+
+**Never logged:** conversation content, prompts, digests, or the summary text
+itself. The summary lives in pi's session file under the same session id —
+join there if you need names.
+
+Rollups: `/summary:cost project` (this project's cwd) and `/summary:cost
+lifetime` (everything). Plain `/summary:cost` stays the in-memory current-
+session view and works with telemetry off. To inspect raw lines:
+
+```sh
+jq -c 'select(.kind == "gate")' ~/.pi/agent/session-summary/usage.jsonl
+jq -s '[.[].cost // 0] | add' ~/.pi/agent/session-summary/usage.jsonl   # total spend
+```
+
+Delete the file to reset; disable via config + `/reload`.

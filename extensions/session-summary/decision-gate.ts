@@ -165,6 +165,8 @@ export interface GateVerdict {
 	provider?: string;
 	materialP?: number;
 	topicConfidence?: number;
+	/** Set when this verdict is a failure fall-through, not a real answer. */
+	error?: string;
 }
 
 // -- Digest: what happened since the last summary -------------------------
@@ -409,10 +411,12 @@ export async function runDecisionGate(
 			return verdict;
 		} catch (err) {
 			const disabled = recordFailure(gateState, config, name);
+			const code = errCode(err);
 			gateState.lastVerdict = {
 				decision: "summarize",
-				reason: `${name} failed (${errCode(err)})${disabled ? ", disabled for session" : ""} → fall through`,
+				reason: `${name} failed (${code})${disabled ? ", disabled for session" : ""} → fall through`,
 				provider: name,
+				error: code,
 			};
 			// fall through to the next active provider
 		}
