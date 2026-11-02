@@ -5,6 +5,11 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.3.30] - 2026-11-02
+
+### Fixed
+- **session-summary v1.3.1.** Requested reasoning effort is now clamped to the model's own `thinkingLevelMap`. pi-ai drops unsupported effort levels on the wire (no `reasoning_effort` param sent), which lets the **server default** apply — for `glm-5.3-flash` that default is the expensive tier (Z.AI recommends `max`; thinking cannot be disabled), so the extension's "minimal" default was silently its priciest posture on that model. Unsupported efforts now fall to the nearest supported level below, cost-first: the bare `zai/glm-5.3-flash` pin lands on its floor (`low`) instead of the server default; an explicit `:medium` also clamps to `low`; supported pins (`:high`, `:max`) pass through untouched. Verbose mode notifies on clamps. `/summary:settings` also preserves the `:effort` suffix when materializing a pin instead of silently dropping it.
+
 ## [0.3.29] - 2026-10-15
 
 ### Changed

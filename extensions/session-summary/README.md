@@ -97,7 +97,12 @@ Pin → cheap-model ladder → **inherit**:
 
 1. **Pin** — `provider` + `model` in config, with optional pi-title-style effort
    suffix: `"model": "zai/glm-5.3-flash:high"`. Efforts: `minimal` (default),
-   `low`, `medium`, `high`.
+   `low`, `medium`, `high`. The requested effort is **clamped to the model's own
+   `thinkingLevelMap`**: unsupported levels fall to the nearest supported level
+   below (cost-first), because pi-ai drops unsupported levels on the wire and
+   the server default is often the expensive tier (e.g. glm-5.3-flash: no
+   minimal/medium, floor is `low`, thinking always on). A bare model gets the
+   model's floor automatically; a supported pin like `:high` passes through.
 2. **Ladder** — cheap external models, first with a working key:
    Codex-subscription luna → gpt nano/mini → Gemini flash-lite → Haiku.
    A 401/403 (region-blocked or rejected key) skips the whole provider for

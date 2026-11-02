@@ -62,6 +62,14 @@
  *  instead of silently doing nothing; gate skips reset the widget's stale
  *  counter; empty/unrenderable deltas are consumed instead of escalating to
  *  a full rebuild.
+ *  v1.3.1 fix: requested reasoning effort is clamped to the model's
+ *  thinkingLevelMap. pi-ai drops unsupported levels on the wire, letting the
+ *  server default apply — for glm-5.3-flash that default is the expensive
+ *  tier, so "minimal" was silently the priciest posture. Unsupported efforts
+ *  now fall to the nearest supported level below (cost-first); unsupported
+ *  defaults (minimal on glm-5.3-flash) land on the model's floor (low).
+ *  /summary:settings also preserves the :effort suffix when materializing a
+ *  pin, instead of silently dropping it to the default.
  *
  * Unchanged from upstream: summary model auto-detection (cheap-model ladder,
  * pin provider/model in config to override), 60s debounce, /summary:settings
@@ -147,6 +155,35 @@ const AUTO_DETECT_SKIP_PROVIDERS = new Set(["openai-codex"]);
 
 /** Reasoning efforts accepted in a `provider/model:effort` spec (pi-title convention). */
 const KNOWN_EFFORTS = new Set(["minimal", "low", "medium", "high"]);
+
+/** All pi thinking levels, cheapest first — used to fall back when a model's
+ *  thinkingLevelMap marks a requested effort unsupported (null). */
+const EFFORT_ORDER = ["minimal", "low", "medium", "high", "xhigh", "max"];
+
+/** Clamp a requested reasoning effort to what the model actually supports.
+ *
+ *  pi-ai's wire layers drop unsupported levels silently (thinkingLevelMap[level]
+ *  === null → no reasoning_effort param), which lets the SERVER default kick in.
+ *  For models like glm-5.3-flash — thinking always on, server default is the
+ *  expensive tier — that makes an unsupported "cheap" request quietly MORE
+ *  expensive, not less. So clamp cost-first: unsupported levels fall to the
+ *  nearest supported level BELOW the request; if none below, the cheapest
+ *  supported overall. Supported requests and map-less models pass through. */
+function clampEffort(effort: string, model: { thinkingLevelMap?: unknown }): string {
+	const map = model.thinkingLevelMap as Record<string, string | null> | undefined;
+	if (!map || typeof map !== "object") return effort;
+	if (typeof map[effort] === "string") return effort;
+	let fallback: string | undefined;
+	for (const level of EFFORT_ORDER) {
+		if (level === effort) break;
+		if (typeof map[level] === "string") fallback = level;
+	}
+	if (fallback) return fallback;
+	for (const level of EFFORT_ORDER) {
+		if (typeof map[level] === "string") return level;
+	}
+	return effort; // map marks nothing supported — pass through, server decides
+}
 
 /** Parse a model spec: `provider/model`, bare `model`, either with an optional
  *  `:effort` suffix (`zai/glm-5.3-flash:high`). Unknown efforts fall back to
@@ -613,6 +650,17 @@ export default function sessionSummaryExtension(pi: ExtensionAPI) {
 		const telemetryUpdate: SummaryEventData["update"] = shouldResummarize ? "full" : "incremental";
 
 		// Fire-and-forget: non-blocking async LLM call
+		// Reasoning effort: pin-specified via `:effort` suffix, else minimal — then
+		// clamped to the model's own thinkingLevelMap. Without the clamp an
+		// unsupported level is dropped on the wire and the server default (often
+		// the expensive tier, e.g. glm-5.3-flash) quietly applies instead.
+		const requestedEffort = resolved.effort ?? "minimal";
+		const effort = clampEffort(requestedEffort, model);
+		if (effort !== requestedEffort && config.verbose && latestCtx && !isCtxStale(latestCtx) && latestCtx.hasUI) {
+			try {
+				latestCtx.ui.notify(`[session-summary] effort ${requestedEffort} unsupported by ${model.id} — using ${effort}`, "info");
+			} catch { /* stale ctx */ }
+		}
 		complete(model, {
 			systemPrompt: "You are a concise summarizer. Output a single line summary of a coding session.",
 			messages: [{
@@ -626,9 +674,7 @@ export default function sessionSummaryExtension(pi: ExtensionAPI) {
 			// Note: the Codex (ChatGPT OAuth) API does not honor maxTokens; the prompt's
 			// "single line" instruction is the effective cap there.
 			maxTokens: config.maxTokens,
-			// Reasoning effort: pin-specified via `:effort` suffix, else minimal
-			// (cheapest tier — this is an 80-char summary, not a research task).
-			reasoning: (resolved.effort ?? "minimal") as any,
+			reasoning: effort as any,
 			timeoutMs: LLM_TIMEOUT_MS,
 		} as any)
 			.then((response) => {
@@ -856,7 +902,9 @@ export default function sessionSummaryExtension(pi: ExtensionAPI) {
 				const settingsToWrite = {
 					...DEFAULTS,
 					provider: pinned ? resolved!.provider : "",
-					model: pinned ? resolved!.model : "",
+					// Preserve the effort suffix — writing the bare model would drop a
+					// `:high` pin to the (clamped) default on next load.
+					model: pinned ? resolved!.model + (resolved!.effort ? ":" + resolved!.effort : "") : "",
 				};
 				delete (settingsToWrite as any).decisionGate;
 				writeFileSync(globalPath, JSON.stringify(settingsToWrite, null, 2) + "\n");
