@@ -1,5 +1,5 @@
 /**
- * session-summary v1.2.1 (pi-agent fork) — maintains a one-line LLM-generated
+ * session-summary v1.3.0 (pi-agent fork) — maintains a one-line LLM-generated
  * session summary as the session name, so it shows up in pi's status bar and
  * the /resume session list instead of the truncated first user message.
  *
@@ -42,6 +42,26 @@
  *      reconciles the gap. Per-instance: restart/reload resumes auto.
  *   8. First-run whisper (v1.2.0) — one toast per pi process on the first
  *      successful summary, independent of verbose.
+ *   9. Opt-in local usage log (v1.3.0, ./telemetry.ts) — telemetry.enabled
+ *      appends one metadata line per summarizer/gate attempt to
+ *      ~/.pi/agent/session-summary/usage.jsonl (created 0600): when, which
+ *      session/project, provider/model, outcome, tokens, cost, gate verdict +
+ *      probability. Never conversation content, prompts, or summary text.
+ *      /summary:cost [project|lifetime] rolls the log up; plain
+ *      /summary:cost stays the in-memory session view.
+ *  10. Headless opt-in (v1.3.0) — scripted sessions (pi -p, JSON mode) no
+ *      longer spend summarizer/gate calls by default; runHeadless: true opts
+ *      back in. Interactive modes (tui, rpc) are unaffected.
+ *
+ *  v1.3.0 fixes: project config now layers over global (a project file used
+ *  to wipe global decisionGate customization); self-written names are
+ *  sanitized with pi's exact appendSessionInfo rule so a stray \r can no
+ *  longer trip the manual-name guard and freeze auto-naming; full rebuilds
+ *  embed the compaction summary so post-compaction re-summarizes don't
+ *  forget pre-compaction work; /summary:update reports a locked summary
+ *  instead of silently doing nothing; gate skips reset the widget's stale
+ *  counter; empty/unrenderable deltas are consumed instead of escalating to
+ *  a full rebuild.
  *
  * Unchanged from upstream: summary model auto-detection (cheap-model ladder,
  * pin provider/model in config to override), 60s debounce, /summary:settings
@@ -66,6 +86,14 @@ import {
 	type GateState,
 	type GateVerdict,
 } from "./decision-gate.ts";
+import {
+	emitTelemetry,
+	readRollup,
+	TELEMETRY_DEFAULTS,
+	type SummaryEventData,
+	type TelemetryBase,
+	type TelemetryConfig,
+} from "./telemetry.ts";
 import type { ContentBlock, SessionEntry } from "./session-entries.ts";
 
 // -- Configuration --------------------------------------------------------
@@ -78,6 +106,9 @@ interface SummaryConfig {
 	resummarizeTokenThreshold: number;
 	debugWidget: boolean;
 	verbose: boolean;
+	/** Also summarize/gate in scripted sessions (pi -p, JSON mode). Default false. */
+	runHeadless: boolean;
+	telemetry: TelemetryConfig;
 	decisionGate: DecisionGateConfig;
 }
 
@@ -87,6 +118,8 @@ const DEFAULTS: SummaryConfig = {
 	resummarizeTokenThreshold: 40_000,
 	debugWidget: false,
 	verbose: false,
+	runHeadless: false,
+	telemetry: { ...TELEMETRY_DEFAULTS },
 	decisionGate: resolveGateConfig(),
 };
 
@@ -140,14 +173,25 @@ function loadConfig(cwd: string): SummaryConfig {
 	const globalPath = join(getAgentDir(), "session-summary.json");
 	const projectPath = join(cwd, ".pi", "session-summary.json");
 
-	let config: SummaryConfig = { ...DEFAULTS };
+	let config: SummaryConfig = { ...DEFAULTS, telemetry: { ...TELEMETRY_DEFAULTS } };
 
 	for (const path of [globalPath, projectPath]) {
 		if (existsSync(path)) {
 			try {
-				const content = readFileSync(path, "utf-8");
-				const parsed = JSON.parse(content);
-				config = { ...config, ...parsed, decisionGate: resolveGateConfig({ ...parsed.decisionGate }) };
+				const parsed = JSON.parse(readFileSync(path, "utf-8"));
+				// Layer over what's accumulated: scalars override, but the gate config
+				// re-resolves over the merged state so a project file without a
+				// decisionGate key (or with a partial one) keeps global customization
+				// instead of resetting the registry to presets.
+				const gate = parsed.decisionGate
+					? resolveGateConfig({ ...config.decisionGate, ...parsed.decisionGate })
+					: config.decisionGate;
+				config = {
+					...config,
+					...parsed,
+					telemetry: { ...config.telemetry, ...parsed.telemetry },
+					decisionGate: gate,
+				};
 			} catch (err) {
 				console.error(`[session-summary] Failed to load config from ${path}: ${err}`);
 			}
@@ -162,6 +206,15 @@ function loadConfig(cwd: string): SummaryConfig {
 /** Rough token estimate: ~4 chars per token. */
 function estimateTokens(text: string): number {
 	return Math.ceil(text.length / 4);
+}
+
+/** Mirror pi's appendSessionInfo sanitizer exactly (strips [\r\n]+ runs, then
+ *  trims). The manual-name guard compares our own writes byte-for-byte against
+ *  what pi stores, so self-writes must be sanitized before assignment — a
+ *  stray \r surviving our old \n-only collapse used to trip the guard and
+ *  silently freeze auto-naming for the session. */
+function sanitizeName(name: string): string {
+	return name.replace(/[\r\n]+/g, " ").trim();
 }
 
 /** Extract only user+assistant text from a content field, collapsing tool i/o. */
@@ -489,6 +542,13 @@ export default function sessionSummaryExtension(pi: ExtensionAPI) {
 		// Decide: full rebuild vs incremental update. Full rebuild consumes the
 		// whole conversation; incremental embeds only the uncovered delta.
 		const deltaConv = deltaEntries?.length ? buildConversation(deltaEntries) : "";
+		// A provided delta that renders to nothing (empty slice, or only metadata
+		// entries like usage/model_change) is a no-op, NOT a reason to rebuild the
+		// whole conversation. Consume it so it doesn't rescan every turn.
+		if (deltaEntries && lastSummary && !opts?.forceFull && !deltaConv.trim()) {
+			processedEntryCount += deltaEntries.length;
+			return;
+		}
 		const deltaTokens = deltaConv ? estimateTokens(deltaConv) : Infinity;
 		const shouldResummarize = !lastSummary || !!opts?.forceFull || deltaTokens >= config.resummarizeTokenThreshold;
 
@@ -501,6 +561,15 @@ export default function sessionSummaryExtension(pi: ExtensionAPI) {
 		// simply ride along in the next delta).
 		const coveredCount = deltaEntries?.length ? processedEntryCount + deltaEntries.length : branch.length;
 
+		// Full rebuilds must survive compaction: buildConversation skips
+		// CompactionEntry (not type "message"), so post-compaction rebuilds would
+		// otherwise only see entries after the compression point. Re-attach the
+		// compaction summary as context so the name keeps the pre-compaction thread.
+		const compaction = shouldResummarize ? getCompactionSummary(branch) : undefined;
+		const compactionNote = compaction
+			? `[Earlier session context, compacted away]: ${compaction.slice(0, 2000)}${compaction.length > 2000 ? "…" : ""}\n\n`
+			: "";
+
 		let prompt: string;
 		if (shouldResummarize) {
 			prompt = [
@@ -509,7 +578,7 @@ export default function sessionSummaryExtension(pi: ExtensionAPI) {
 				"Be maximally specific and concrete.",
 				"",
 				"<conversation>",
-				conversation,
+				compactionNote + conversation,
 				"</conversation>",
 			].join("\n");
 		} else {
@@ -531,6 +600,17 @@ export default function sessionSummaryExtension(pi: ExtensionAPI) {
 		}
 
 		pendingLLMCall = true;
+
+		// Telemetry facts captured synchronously: ctx getters can go stale mid-flight.
+		const callStarted = Date.now();
+		const telemetryBase: TelemetryBase = {
+			kind: "summary",
+			session: ctx.sessionManager.getSessionId() ?? "(unknown)",
+			project: ctx.cwd,
+			mode: ctx.mode,
+		};
+		const telemetryProvider = `${model.provider}/${model.id}`;
+		const telemetryUpdate: SummaryEventData["update"] = shouldResummarize ? "full" : "incremental";
 
 		// Fire-and-forget: non-blocking async LLM call
 		complete(model, {
@@ -592,6 +672,13 @@ export default function sessionSummaryExtension(pi: ExtensionAPI) {
 							rejectedProviders.add(model.provider);
 						}
 					}
+					emitTelemetry(config.telemetry, telemetryBase, {
+						update: telemetryUpdate,
+						provider: telemetryProvider,
+						outcome: "error",
+						error: String(code).slice(0, 80),
+						ms: Date.now() - callStarted,
+					});
 					return; // don't update summary
 				}
 
@@ -604,8 +691,9 @@ export default function sessionSummaryExtension(pi: ExtensionAPI) {
 					.replace(/\n+/g, " ");
 
 				if (text) {
-					const changed = text !== lastSummary;
-					lastSummary = text;
+					const summaryText = sanitizeName(text);
+					const changed = summaryText !== lastSummary;
+					lastSummary = summaryText;
 					processedEntryCount = coveredCount;
 					turnsSinceSummary = 0;
 					lastSummaryTime = Date.now();
@@ -635,12 +723,32 @@ export default function sessionSummaryExtension(pi: ExtensionAPI) {
 						}
 					}
 				}
+				emitTelemetry(config.telemetry, telemetryBase, {
+					update: telemetryUpdate,
+					provider: telemetryProvider,
+					outcome: "ok",
+					...(response.usage
+						? {
+								inputTokens: response.usage.input,
+								outputTokens: response.usage.output,
+								...(response.usage.cost ? { cost: response.usage.cost.total } : {}),
+							}
+						: {}),
+					ms: Date.now() - callStarted,
+				});
 			})
 			.catch((err) => {
 				const msg = err?.message || String(err);
 				// err.name is usually just "Error" -- useless; prefer code/status/message
 				const code = err?.code || err?.status || msg.slice(0, 80);
 				lastError = String(code);
+				emitTelemetry(config.telemetry, telemetryBase, {
+					update: telemetryUpdate,
+					provider: telemetryProvider,
+					outcome: "error",
+					error: String(code).slice(0, 80),
+					ms: Date.now() - callStarted,
+				});
 			})
 			.finally(() => {
 				pendingLLMCall = false;
@@ -675,6 +783,13 @@ export default function sessionSummaryExtension(pi: ExtensionAPI) {
 		}
 
 		const activity = buildActivityDigest(deltaEntries);
+		const gateStarted = Date.now();
+		const gateBase: TelemetryBase = {
+			kind: "gate",
+			session: ctx.sessionManager.getSessionId() ?? "(unknown)",
+			project: ctx.cwd,
+			mode: ctx.mode,
+		};
 		let verdict: GateVerdict | undefined;
 		try {
 			verdict = await runDecisionGate(config.decisionGate, gateState, lastSummary, activity);
@@ -684,6 +799,18 @@ export default function sessionSummaryExtension(pi: ExtensionAPI) {
 			verdict = undefined;
 		}
 		if (verdict?.provider) gateCallCount++;
+		// A verdict means a gate attempt actually happened (success OR fall-through
+		// failure). Gate unavailable (undefined) = no call, no event.
+		if (verdict) {
+			emitTelemetry(config.telemetry, gateBase, {
+				provider: verdict.provider ?? "(none)",
+				outcome: verdict.error ? "error" : "ok",
+				...(verdict.error ? { error: verdict.error } : {}),
+				...(verdict.error ? {} : { decision: verdict.decision }),
+				...(verdict.materialP !== undefined ? { materialP: verdict.materialP } : {}),
+				ms: Date.now() - gateStarted,
+			});
+		}
 
 		if (verdict) {
 			if (config.verbose && latestCtx && !isCtxStale(latestCtx) && latestCtx.hasUI) {
@@ -692,8 +819,11 @@ export default function sessionSummaryExtension(pi: ExtensionAPI) {
 				} catch { /* stale ctx */ }
 			}
 			if (verdict.decision === "skip") {
-				// Nothing material — consume the delta so it doesn't pile up, keep the name frozen.
+				// Nothing material — consume the delta so it doesn't pile up, keep the
+				// name frozen. The summary is deliberately current, so the widget's
+				// stale counter resets too ("[N turns ago]" would read as neglect).
 				processedEntryCount = branch.length;
+				turnsSinceSummary = 0;
 				updateWidget(ctx);
 				return;
 			}
@@ -741,6 +871,10 @@ export default function sessionSummaryExtension(pi: ExtensionAPI) {
 	pi.registerCommand("summary:update", {
 		description: "Force-update the session summary now",
 		handler: async (_args, ctx) => {
+			if (manualName) {
+				ctx.ui.notify("Summary is locked — force-update skipped. /summary:lock or /summary:clear re-enables updates", "warning");
+				return;
+			}
 			if (pendingLLMCall) {
 				ctx.ui.notify("Summary update already in progress", "info");
 				return;
@@ -768,8 +902,43 @@ export default function sessionSummaryExtension(pi: ExtensionAPI) {
 	});
 
 	pi.registerCommand("summary:cost", {
-		description: "Show summary model and its cost this session",
-		handler: async (_args, ctx) => {
+		description: "Show summary model and its cost (this session; or rollup: project | lifetime)",
+		handler: async (args, ctx) => {
+			const scope = (args || "").trim().toLowerCase();
+
+			if (scope === "project" || scope === "lifetime" || scope === "all") {
+				if (!config.telemetry.enabled) {
+					ctx.ui.notify(
+						`Telemetry is off — enable it in ~/.pi/agent/session-summary.json: "telemetry": { "enabled": true }, then /reload. It appends metadata-only lines to ${config.telemetry.path || "~/.pi/agent/session-summary/usage.jsonl"} (never conversation content).`,
+						"info",
+					);
+					return;
+				}
+				const rollup = readRollup(config.telemetry, scope === "project" ? { project: ctx.cwd } : undefined);
+				const label = scope === "project" ? `project ${ctx.cwd}` : "lifetime";
+				if (!rollup.summaryCalls && !rollup.gateCalls) {
+					ctx.ui.notify(`No usage logged for ${label} yet${rollup.skipped ? ` (${rollup.skipped} unparseable lines skipped)` : ""}`, "info");
+					return;
+				}
+				const costStr = rollup.cost > 0 ? `$${rollup.cost.toFixed(4)}` : "$0";
+				const unknownStr = rollup.costUnknown ? ` (${rollup.costUnknown} calls w/o reported cost)` : "";
+				const errStr = rollup.errors ? `, ${rollup.errors} errors` : "";
+				const span = rollup.first ? ` · ${rollup.first.slice(0, 10)}→${rollup.last!.slice(0, 10)}` : "";
+				ctx.ui.notify(
+					`${label}: ${rollup.summaryCalls} summarizer calls, ${rollup.gateCalls} gate calls (${rollup.gateSkips} skips${errStr}) · tokens ${rollup.inputTokens}→${rollup.outputTokens} · cost: ${costStr}${unknownStr}${span}${rollup.skipped ? ` · ${rollup.skipped} unparseable lines` : ""}`,
+					"info",
+				);
+				for (const [provider, s] of [...rollup.byProvider.entries()].sort((a, b) => b[1].calls - a[1].calls)) {
+					const pc = s.cost > 0 ? `, $${s.cost.toFixed(4)}` : "";
+					const pu = s.costUnknown ? `, ${s.costUnknown} w/o cost` : "";
+					ctx.ui.notify(`  ${provider}: ${s.calls} calls${pc}${pu} · ${s.inputTokens}→${s.outputTokens} tok`, "info");
+				}
+				return;
+			} else if (scope && scope !== "session") {
+				ctx.ui.notify("Usage: /summary:cost [session|project|lifetime]", "info");
+				return;
+			}
+
 			// Ensure model is resolved fresh
 			if (!resolvedModelName) resolveModel(ctx);
 			const model = resolvedModelName || "(none)";
@@ -876,6 +1045,10 @@ export default function sessionSummaryExtension(pi: ExtensionAPI) {
 
 	pi.on("agent_end", async (_event, ctx) => {
 		latestCtx = ctx;
+		// Scripted sessions (pi -p, JSON mode) don't surface the name to a TUI
+		// user — don't spend summarizer/gate calls there unless opted in via
+		// runHeadless. Interactive modes (tui, rpc) are unaffected.
+		if (!config.runHeadless && (ctx.mode === "print" || ctx.mode === "json")) return;
 		if (manualName) return;
 		turnsSinceSummary++;
 		updateWidget(ctx);
