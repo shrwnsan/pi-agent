@@ -5,6 +5,11 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.3.31] - 2026-11-02
+
+### Fixed
+- **session-summary v1.3.2.** `/summary:cost project|lifetime` and `/summary:gate` emitted their multi-line rollups as successive `notify()` calls. pi's TUI collapses consecutive info notifications into a single status line (only the last message survives), so users saw exactly one line — whichever provider printed last — and the rest of the rollup (headline aggregates, other providers) was invisible. Both commands now render their full output as one multi-line notify.
+
 ## [0.3.30] - 2026-11-02
 
 ### Fixed

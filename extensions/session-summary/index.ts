@@ -70,6 +70,10 @@
  *  defaults (minimal on glm-5.3-flash) land on the model's floor (low).
  *  /summary:settings also preserves the :effort suffix when materializing a
  *  pin, instead of silently dropping it to the default.
+ *  v1.3.2 fix: /summary:cost project|lifetime and /summary:gate emitted their
+ *  rollups as successive info notifies; pi's TUI collapses consecutive info
+ *  notifies into one status line (only the last message survives), so users
+ *  saw a single provider line. Both now render as one multi-line notify.
  *
  * Unchanged from upstream: summary model auto-detection (cheap-model ladder,
  * pin provider/model in config to override), 60s debounce, /summary:settings
@@ -972,15 +976,18 @@ export default function sessionSummaryExtension(pi: ExtensionAPI) {
 				const unknownStr = rollup.costUnknown ? ` (${rollup.costUnknown} calls w/o reported cost)` : "";
 				const errStr = rollup.errors ? `, ${rollup.errors} errors` : "";
 				const span = rollup.first ? ` · ${rollup.first.slice(0, 10)}→${rollup.last!.slice(0, 10)}` : "";
-				ctx.ui.notify(
+				// One notify for the whole rollup: pi's TUI collapses consecutive info
+				// notifies into a single status line (only the last message survives),
+				// so per-line notifies would hide everything but the final provider.
+				const lines = [
 					`${label}: ${rollup.summaryCalls} summarizer calls, ${rollup.gateCalls} gate calls (${rollup.gateSkips} skips${errStr}) · tokens ${rollup.inputTokens}→${rollup.outputTokens} · cost: ${costStr}${unknownStr}${span}${rollup.skipped ? ` · ${rollup.skipped} unparseable lines` : ""}`,
-					"info",
-				);
+				];
 				for (const [provider, s] of [...rollup.byProvider.entries()].sort((a, b) => b[1].calls - a[1].calls)) {
 					const pc = s.cost > 0 ? `, $${s.cost.toFixed(4)}` : "";
 					const pu = s.costUnknown ? `, ${s.costUnknown} w/o cost` : "";
-					ctx.ui.notify(`  ${provider}: ${s.calls} calls${pc}${pu} · ${s.inputTokens}→${s.outputTokens} tok`, "info");
+					lines.push(`  ${provider}: ${s.calls} calls${pc}${pu} · ${s.inputTokens}→${s.outputTokens} tok`);
 				}
+				ctx.ui.notify(lines.join("\n"), "info");
 				return;
 			} else if (scope && scope !== "session") {
 				ctx.ui.notify("Usage: /summary:cost [session|project|lifetime]", "info");
@@ -1005,9 +1012,9 @@ export default function sessionSummaryExtension(pi: ExtensionAPI) {
 				ctx.ui.notify("Decision gate disabled (decisionGate.enabled: false)", "info");
 				return;
 			}
-			for (const line of gateProviderStatus(gateConfig, gateState)) {
-				ctx.ui.notify(`[gate] ${line}`, "info");
-			}
+			// Same collapse hazard as the cost rollup: one notify, not a loop.
+			const gateStatus = gateProviderStatus(gateConfig, gateState).map((line) => `[gate] ${line}`).join("\n");
+			ctx.ui.notify(gateStatus, "info");
 			const branch = ctx.sessionManager.getBranch();
 			if (branch.length < processedEntryCount) processedEntryCount = 0;
 			const deltaEntries = branch.slice(processedEntryCount);
