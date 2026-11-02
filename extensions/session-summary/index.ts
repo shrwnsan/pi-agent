@@ -1,5 +1,5 @@
 /**
- * session-summary v1.3.0 (pi-agent fork) — maintains a one-line LLM-generated
+ * session-summary v1.3.3 (pi-agent fork) — maintains a one-line LLM-generated
  * session summary as the session name, so it shows up in pi's status bar and
  * the /resume session list instead of the truncated first user message.
  *
@@ -101,6 +101,7 @@ import {
 import {
 	emitTelemetry,
 	readRollup,
+	tildify,
 	TELEMETRY_DEFAULTS,
 	type SummaryEventData,
 	type TelemetryBase,
@@ -725,6 +726,7 @@ export default function sessionSummaryExtension(pi: ExtensionAPI) {
 					emitTelemetry(config.telemetry, telemetryBase, {
 						update: telemetryUpdate,
 						provider: telemetryProvider,
+						effort,
 						outcome: "error",
 						error: String(code).slice(0, 80),
 						ms: Date.now() - callStarted,
@@ -776,6 +778,7 @@ export default function sessionSummaryExtension(pi: ExtensionAPI) {
 				emitTelemetry(config.telemetry, telemetryBase, {
 					update: telemetryUpdate,
 					provider: telemetryProvider,
+					effort,
 					outcome: "ok",
 					...(response.usage
 						? {
@@ -795,6 +798,7 @@ export default function sessionSummaryExtension(pi: ExtensionAPI) {
 				emitTelemetry(config.telemetry, telemetryBase, {
 					update: telemetryUpdate,
 					provider: telemetryProvider,
+					effort,
 					outcome: "error",
 					error: String(code).slice(0, 80),
 					ms: Date.now() - callStarted,
@@ -967,7 +971,7 @@ export default function sessionSummaryExtension(pi: ExtensionAPI) {
 					return;
 				}
 				const rollup = readRollup(config.telemetry, scope === "project" ? { project: ctx.cwd } : undefined);
-				const label = scope === "project" ? `project ${ctx.cwd}` : "lifetime";
+				const label = scope === "project" ? `project ${tildify(ctx.cwd)}` : "lifetime";
 				if (!rollup.summaryCalls && !rollup.gateCalls) {
 					ctx.ui.notify(`No usage logged for ${label} yet${rollup.skipped ? ` (${rollup.skipped} unparseable lines skipped)` : ""}`, "info");
 					return;
