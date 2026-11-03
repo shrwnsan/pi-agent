@@ -1,5 +1,5 @@
 /**
- * session-summary v1.3.3 (pi-agent fork) — maintains a one-line LLM-generated
+ * session-summary v1.3.4 (pi-agent fork) — maintains a one-line LLM-generated
  * session summary as the session name, so it shows up in pi's status bar and
  * the /resume session list instead of the truncated first user message.
  *
@@ -984,13 +984,21 @@ export default function sessionSummaryExtension(pi: ExtensionAPI) {
 				// notifies into a single status line (only the last message survives),
 				// so per-line notifies would hide everything but the final provider.
 				const lines = [
-					`${label}: ${rollup.summaryCalls} summarizer calls, ${rollup.gateCalls} gate calls (${rollup.gateSkips} skips${errStr}) · tokens ${rollup.inputTokens}→${rollup.outputTokens} · cost: ${costStr}${unknownStr}${span}${rollup.skipped ? ` · ${rollup.skipped} unparseable lines` : ""}`,
+					`${label}: ${rollup.summaryCalls} summarizer call${rollup.summaryCalls === 1 ? "" : "s"}, ${rollup.gateCalls} gate call${rollup.gateCalls === 1 ? "" : "s"} (${rollup.gateSkips} skips${errStr}) · tokens ${rollup.inputTokens}→${rollup.outputTokens} · cost: ${costStr}${unknownStr}${span}${rollup.skipped ? ` · ${rollup.skipped} unparseable lines` : ""}`,
 				];
+				// Grouped by kind: LLMs (summarizer) and decision models (gate) read
+				// as separate ledgers — they have different units (tokens/cost vs
+				// verdicts) and different mental buckets.
+				const llmRows: string[] = [];
+				const gateRows: string[] = [];
 				for (const [provider, s] of [...rollup.byProvider.entries()].sort((a, b) => b[1].calls - a[1].calls)) {
 					const pc = s.cost > 0 ? `, $${s.cost.toFixed(4)}` : "";
 					const pu = s.costUnknown ? `, ${s.costUnknown} w/o cost` : "";
-					lines.push(`  ${provider}: ${s.calls} calls${pc}${pu} · ${s.inputTokens}→${s.outputTokens} tok`);
+					const row = `    ${provider}: ${s.calls} call${s.calls === 1 ? "" : "s"}${pc}${pu} · ${s.inputTokens}→${s.outputTokens} tok`;
+					(s.kind === "gate" ? gateRows : llmRows).push(row);
 				}
+				if (llmRows.length) lines.push("  LLMs:", ...llmRows);
+				if (gateRows.length) lines.push("  Decision models:", ...gateRows);
 				ctx.ui.notify(lines.join("\n"), "info");
 				return;
 			} else if (scope && scope !== "session") {
@@ -1002,8 +1010,8 @@ export default function sessionSummaryExtension(pi: ExtensionAPI) {
 			if (!resolvedModelName) resolveModel(ctx);
 			const model = resolvedModelName || "(none)";
 			const costStr = totalCost.total > 0 ? `$${totalCost.total.toFixed(4)}` : "$0";
-			const gateStr = gateCallCount ? ` + ${gateCallCount} gate calls` : "";
-			const line = `${model} | ${llmCallCount} llm calls${gateStr} | tokens: ${totalTokens.input}→${totalTokens.output} | cost: ${costStr} (in: $${totalCost.input.toFixed(4)}, out: $${totalCost.output.toFixed(4)}, cache-r: $${totalCost.cacheRead.toFixed(4)}, cache-w: $${totalCost.cacheWrite.toFixed(4)})`;
+			const gateStr = gateCallCount ? ` + ${gateCallCount} gate call${gateCallCount === 1 ? "" : "s"}` : "";
+			const line = `${model} | ${llmCallCount} llm call${llmCallCount === 1 ? "" : "s"}${gateStr} | tokens: ${totalTokens.input}→${totalTokens.output} | cost: ${costStr} (in: $${totalCost.input.toFixed(4)}, out: $${totalCost.output.toFixed(4)}, cache-r: $${totalCost.cacheRead.toFixed(4)}, cache-w: $${totalCost.cacheWrite.toFixed(4)})`;
 			ctx.ui.notify(line, "info");
 		},
 	});

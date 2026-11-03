@@ -113,7 +113,7 @@ export interface Rollup {
 	costUnknown: number;
 	first?: string;
 	last?: string;
-	byProvider: Map<string, { calls: number; cost: number; costUnknown: number; inputTokens: number; outputTokens: number }>;
+	byProvider: Map<string, { kind: "summary" | "gate"; calls: number; cost: number; costUnknown: number; inputTokens: number; outputTokens: number }>;
 }
 
 export function emptyRollup(): Rollup {
@@ -161,7 +161,7 @@ export function readRollup(config: TelemetryConfig, filter?: { project?: string 
 		// Summary events group by provider:effort — a different effort is a
 		// different effective configuration. Gate events have no effort.
 		const effort = e.kind === "summary" && typeof e.effort === "string" && e.effort ? ":" + e.effort : "";
-		const stats = rollup.byProvider.get(provider + effort) ?? { calls: 0, cost: 0, costUnknown: 0, inputTokens: 0, outputTokens: 0 };
+		const stats = rollup.byProvider.get(provider + effort) ?? { kind: e.kind, calls: 0, cost: 0, costUnknown: 0, inputTokens: 0, outputTokens: 0 };
 		stats.calls++;
 
 		if (e.outcome === "error") rollup.errors++;
