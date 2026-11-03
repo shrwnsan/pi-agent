@@ -1,5 +1,5 @@
 /**
- * session-summary v1.3.4 (pi-agent fork) — maintains a one-line LLM-generated
+ * session-summary v1.3.5 (pi-agent fork) — maintains a one-line LLM-generated
  * session summary as the session name, so it shows up in pi's status bar and
  * the /resume session list instead of the truncated first user message.
  *
@@ -997,8 +997,9 @@ export default function sessionSummaryExtension(pi: ExtensionAPI) {
 					const row = `    ${provider}: ${s.calls} call${s.calls === 1 ? "" : "s"}${pc}${pu} · ${s.inputTokens}→${s.outputTokens} tok`;
 					(s.kind === "gate" ? gateRows : llmRows).push(row);
 				}
-				if (llmRows.length) lines.push("  LLMs:", ...llmRows);
+				// Decision models first — they literally run first.
 				if (gateRows.length) lines.push("  Decision models:", ...gateRows);
+				if (llmRows.length) lines.push("  LLMs:", ...llmRows);
 				ctx.ui.notify(lines.join("\n"), "info");
 				return;
 			} else if (scope && scope !== "session") {
