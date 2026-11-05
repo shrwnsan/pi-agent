@@ -1,5 +1,5 @@
 /**
- * session-summary v1.3.6 (pi-agent fork) — maintains a one-line LLM-generated
+ * session-summary v1.3.7 (pi-agent fork) — maintains a one-line LLM-generated
  * session summary as the session name, so it shows up in pi's status bar and
  * the /resume session list instead of the truncated first user message.
  *
@@ -81,6 +81,10 @@
  *  v1.3.6: gate decision events record an attempts trail (providers tried and
  *  failed before the answering one, e.g. ["liquid: HTTP 401"]); the headless
  *  verification probe ships as probe.mjs (+ probe/stubs/) and runs offline.
+ *  v1.3.7: /summary:gate joins provider status and its outcome into one
+ *  notify. The previous separate status notify was replaced by the outcome
+ *  message under pi's notify collapse, so provider readiness (fail counts,
+ *  key state) was never visible.
  *  v1.3.2 fix: /summary:cost project|lifetime and /summary:gate emitted their
  *  rollups as successive info notifies; pi's TUI collapses consecutive info
  *  notifies into one status line (only the last message survives), so users
@@ -1037,27 +1041,27 @@ export default function sessionSummaryExtension(pi: ExtensionAPI) {
 				ctx.ui.notify("Decision gate disabled (decisionGate.enabled: false)", "info");
 				return;
 			}
-			// Same collapse hazard as the cost rollup: one notify, not a loop.
+			// One notify per outcome, with the provider status prepended: pi's TUI
+			// collapses consecutive info notifies into a single status line, so a
+			// separate status notify would be replaced before it can be read.
 			const gateStatus = gateProviderStatus(gateConfig, gateState).map((line) => `[gate] ${line}`).join("\n");
-			ctx.ui.notify(gateStatus, "info");
 			const branch = ctx.sessionManager.getBranch();
 			if (branch.length < processedEntryCount) processedEntryCount = 0;
 			const deltaEntries = branch.slice(processedEntryCount);
 			if (!lastSummary) {
-				ctx.ui.notify("No summary yet — the first summary always runs the LLM (nothing to gate)", "info");
+				ctx.ui.notify(`${gateStatus}\nNo summary yet — the first summary always runs the LLM (nothing to gate)`, "info");
 				return;
 			}
 			const activity = buildActivityDigest(deltaEntries);
 			if (!activity.trim()) {
-				ctx.ui.notify(`No uncovered activity (${processedEntryCount}/${branch.length} entries covered by the summary)`, "info");
+				ctx.ui.notify(`${gateStatus}\nNo uncovered activity (${processedEntryCount}/${branch.length} entries covered by the summary) — the pipeline already judged everything. New turns reopen the dry run inside the debounce window.`, "info");
 				return;
 			}
-			ctx.ui.notify("Running decision gate...", "info");
 			const verdict = await runDecisionGate(gateConfig, gateState, lastSummary, activity);
 			const msg = verdict
 				? `${verdict.decision.toUpperCase()} — ${verdict.reason}${verdict.provider ? ` [${verdict.provider}]` : ""}${verdict.materialP !== undefined ? ` p(material)=${verdict.materialP.toFixed(2)}` : ""}`
 				: "Gate unavailable (no provider keys) — LLM path runs ungated";
-			ctx.ui.notify(msg, "info");
+			ctx.ui.notify(`${gateStatus}\n${msg}`, "info");
 		},
 	});
 
