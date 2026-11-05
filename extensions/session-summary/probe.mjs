@@ -434,8 +434,26 @@ console.log("\n[11] telemetry default off");
 	ok(h.llmCalls() === 1 && !existsSync(GLOBAL_LOG), "no log file when disabled; summarizing unaffected");
 }
 
-// == 12. Gate attempt trail ==================================================
-console.log("\n[12] gate attempt trail");
+// == 12. /summary:gate diagnostics surface in one notify =====================
+console.log("\n[12] gate diagnostics single notify");
+{
+	piAi.__reset();
+	writeConfig({ debounceSeconds: 0 });
+	const branch = [msgEntry("user", "hello diag")];
+	const h = makeHarness({ branch });
+	await startSession(h);
+	await agentEnd(h); // first summary lands, delta consumed
+	await tick();
+	h.notifications.length = 0;
+	await h.commands["summary:gate"].handler("", h.ctx);
+	ok(h.notifications.length === 1, "gate diagnostics render as ONE notify (status + outcome survive collapse)");
+	const diag = h.notifications.at(-1)?.msg ?? "";
+	ok(diag.includes("[gate]") && diag.includes("No uncovered activity"), "provider status AND coverage message both visible");
+	ok(diag.includes("covered by the summary") && diag.includes("reopen the dry run"), "coverage message explains steady state");
+}
+
+// == 13. Gate attempt trail ==================================================
+console.log("\n[13] gate attempt trail");
 {
 	piAi.__reset();
 	rmSync(GLOBAL_LOG, { force: true });
