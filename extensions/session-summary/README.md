@@ -198,8 +198,10 @@ What a line contains — metadata only:
 ```
 
 Gate lines swap `update` for `decision` (`skip` / `summarize` /
-`resummarize-full`) and add `materialP`. Error lines carry `outcome: "error"`
-plus a short `error` code.
+`resummarize-full`) and add `materialP`. Gate lines may also carry `attempts`: decision
+providers that were tried and failed before the answering one (for example
+`["liquid: HTTP 401"]`). Error lines carry `outcome: "error"` plus a short
+`error` code.
 
 **Never logged:** conversation content, prompts, digests, or the summary text
 itself. The summary lives in pi's session file under the same session id —
@@ -217,3 +219,19 @@ jq -s '[.[].cost // 0] | add' ~/.pi/agent/session-summary/usage.jsonl   # total 
 ```
 
 Delete the file to reset; disable via config + `/reload`.
+
+## Verification probe
+
+`probe.mjs` runs 40 checks against the extension with stubbed host modules. No
+network, no real keys, no conversation content. It covers config layering, name
+sanitization, compaction handling, locking, headless gating, telemetry privacy
+and file permissions, effort clamping, and the gate attempt trail.
+
+```
+node extensions/session-summary/probe.mjs
+```
+
+The probe finds jiti inside an installed pi-coding-agent package. Set
+`PI_CODING_AGENT_DIR` if your install lives somewhere unusual. This is a logic
+regression probe. Changes that only appear in real terminal rendering still
+need a TUI check.
