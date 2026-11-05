@@ -167,6 +167,9 @@ export interface GateVerdict {
 	topicConfidence?: number;
 	/** Set when this verdict is a failure fall-through, not a real answer. */
 	error?: string;
+	/** Providers that were attempted and failed before this verdict, as
+	 *  "name: code" pairs. Skipped (disabled/keyless) providers are absent. */
+	attempts?: string[];
 }
 
 // -- Digest: what happened since the last summary -------------------------
@@ -383,6 +386,7 @@ export async function runDecisionGate(
 
 	const stateText = buildGateStateText(summary, activity);
 	const threshold = config.confidenceThreshold;
+	const attempts: string[] = [];
 
 	for (const name of config.providers) {
 		const spec = config.specs[name];
@@ -408,15 +412,18 @@ export async function runDecisionGate(
 				verdict = verdictFromAnswers(name, answers, threshold);
 			}
 			gateState.lastVerdict = verdict;
+			if (attempts.length) verdict.attempts = [...attempts];
 			return verdict;
 		} catch (err) {
 			const disabled = recordFailure(gateState, config, name);
 			const code = errCode(err);
+			attempts.push(`${name}: ${code}`);
 			gateState.lastVerdict = {
 				decision: "summarize",
 				reason: `${name} failed (${code})${disabled ? ", disabled for session" : ""} → fall through`,
 				provider: name,
 				error: code,
+				...(attempts.length ? { attempts: [...attempts] } : {}),
 			};
 			// fall through to the next active provider
 		}

@@ -5,6 +5,19 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.3.35] - 2026-11-03
+
+### Added
+- **session-summary v1.3.6.** Gate decision events record an `attempts` trail: decision providers that were tried and failed before the answering one (for example `["liquid: HTTP 401"]`). A failed provider previously left no trace in the log. The failure showed only in `/summary:gate` fail counters, which die with the session. Verbose gate notifications also include the trail.
+
+### Changed
+- **session-summary ships its verification probe.** The headless probe (40 checks) lives at `extensions/session-summary/probe.mjs` with stubbed host modules under `probe/stubs/`. Run it offline in seconds with `node extensions/session-summary/probe.mjs`. It implements the package's pre-push verification ritual as a runnable artifact instead of a per-session rebuild. It is a logic regression probe. Changes that only appear in real terminal rendering still need a TUI check.
+
+## [0.3.34] - 2026-11-02
+
+### Changed
+- **session-summary v1.3.5.** The `Decision models:` ledger renders first in `/summary:cost` rollups, matching execution order (the gate runs before the summarizer). Entry recorded retroactively; the 0.3.34 release shipped without a CHANGELOG section.
+
 ## [0.3.33] - 2026-11-02
 
 ### Changed

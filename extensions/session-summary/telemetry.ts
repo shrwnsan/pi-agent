@@ -70,6 +70,8 @@ export interface GateEventData {
 	error?: string;
 	decision?: "skip" | "summarize" | "resummarize-full";
 	materialP?: number;
+	/** Providers attempted and failed before this verdict, as "name: code". */
+	attempts?: string[];
 	ms: number;
 }
 

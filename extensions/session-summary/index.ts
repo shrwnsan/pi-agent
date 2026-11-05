@@ -1,5 +1,5 @@
 /**
- * session-summary v1.3.5 (pi-agent fork) — maintains a one-line LLM-generated
+ * session-summary v1.3.6 (pi-agent fork) — maintains a one-line LLM-generated
  * session summary as the session name, so it shows up in pi's status bar and
  * the /resume session list instead of the truncated first user message.
  *
@@ -70,6 +70,17 @@
  *  defaults (minimal on glm-5.3-flash) land on the model's floor (low).
  *  /summary:settings also preserves the :effort suffix when materializing a
  *  pin, instead of silently dropping it to the default.
+ *  v1.3.3: summary telemetry events record the actual (post-clamp) reasoning
+ *  effort; /summary:cost rollups group LLM providers by provider:effort and
+ *  display the project label tildified (~/...) — log keeps absolute paths.
+ *  v1.3.4: /summary:cost rollups render two labeled ledgers — LLMs and
+ *  Decision models — instead of one flat call-count-sorted list, and call
+ *  counts pluralize correctly.
+ *  v1.3.5: Decision models render first, matching execution order (the gate
+ *  literally runs before the summarizer).
+ *  v1.3.6: gate decision events record an attempts trail (providers tried and
+ *  failed before the answering one, e.g. ["liquid: HTTP 401"]); the headless
+ *  verification probe ships as probe.mjs (+ probe/stubs/) and runs offline.
  *  v1.3.2 fix: /summary:cost project|lifetime and /summary:gate emitted their
  *  rollups as successive info notifies; pi's TUI collapses consecutive info
  *  notifies into one status line (only the last message survives), so users
@@ -862,6 +873,7 @@ export default function sessionSummaryExtension(pi: ExtensionAPI) {
 				...(verdict.error ? { error: verdict.error } : {}),
 				...(verdict.error ? {} : { decision: verdict.decision }),
 				...(verdict.materialP !== undefined ? { materialP: verdict.materialP } : {}),
+				...(verdict.attempts?.length ? { attempts: verdict.attempts } : {}),
 				ms: Date.now() - gateStarted,
 			});
 		}
@@ -869,7 +881,7 @@ export default function sessionSummaryExtension(pi: ExtensionAPI) {
 		if (verdict) {
 			if (config.verbose && latestCtx && !isCtxStale(latestCtx) && latestCtx.hasUI) {
 				try {
-					latestCtx.ui.notify(`[gate:${verdict.decision}] ${verdict.reason} (p=${verdict.materialP?.toFixed(2) ?? "?"}${verdict.provider ? `, ${verdict.provider}` : ""})`, "info");
+					latestCtx.ui.notify(`[gate:${verdict.decision}] ${verdict.reason} (p=${verdict.materialP?.toFixed(2) ?? "?"}${verdict.provider ? `, ${verdict.provider}` : ""}${verdict.attempts?.length ? `; after: ${verdict.attempts.join(", ")}` : ""})`, "info");
 				} catch { /* stale ctx */ }
 			}
 			if (verdict.decision === "skip") {
