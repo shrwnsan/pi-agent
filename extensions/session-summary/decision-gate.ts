@@ -32,9 +32,12 @@
  *                 any compatible endpoint (e.g. OpenRouter's decision
  *                 surfaces).
  *   "chat"      — OpenAI-compatible chat completions asked for a bare
- *                 YES/NO, mapped to 0.9/0.1. For gateways with no decision
- *                 endpoint (Vercel AI Gateway: $5/month free credit) and
- *                 local models (keyless spec + localhost URL).
+ *                 YES/NO, mapped to 0.9/0.1. For decision-model tiers that
+ *                 are not accessible (the Vercel AI Gateway HAS a TypeSafe-
+ *                 compatible decision endpoint since 2026-09-21 — but free
+ *                 tier excludes all decision models, verified 2026-11-10:
+ *                 /typesafe/v1/models returns empty, jev 403s) and local
+ *                 models (keyless spec + localhost URL).
  *
  * Keys come from env vars only (name via apiKeyEnv) — never config files.
  *
@@ -87,6 +90,17 @@ export const BUILTIN_SPECS: Record<string, GateProviderSpec> = {
 		type: "chat",
 		url: "https://ai-gateway.vercel.sh/v1/chat/completions",
 		model: "google/gemini-3.1-flash-lite",
+		apiKeyEnv: "AI_GATEWAY_API_KEY",
+	},
+	// Opt-in: typed Jev through the gateway's TypeSafe-compatible decision
+	// endpoint (POST /typesafe/v1/systemone). NOT in the default cycle —
+	// free-tier gateway keys have no decision-model access (live-verified
+	// 2026-11-10: empty /typesafe/v1/models, jev → RestrictedModelsError);
+	// paid tiers get real probabilities instead of the chat shim's 0.9/0.1.
+	"vercel-jev": {
+		type: "systemone",
+		url: "https://ai-gateway.vercel.sh/typesafe/v1/systemone",
+		model: "typesafe-ai/jev",
 		apiKeyEnv: "AI_GATEWAY_API_KEY",
 	},
 };

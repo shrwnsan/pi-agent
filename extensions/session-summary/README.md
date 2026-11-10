@@ -43,13 +43,20 @@ Built-in presets:
 | `liquid` | `systemone` | `api.liquid.ai/decisions/v1/systemone` | `d1:free` | `LIQUID_API_KEY` |
 | `typesafe` | `systemone` | `api.typesafe.ai/v1/systemone` | `jev-latest` | `TYPESAFE_API_KEY` |
 | `vercel` | `chat` | `ai-gateway.vercel.sh/v1/chat/completions` | `google/gemini-3.1-flash-lite` | `AI_GATEWAY_API_KEY` |
+| `vercel-jev` | `systemone` | `ai-gateway.vercel.sh/typesafe/v1/systemone` | `typesafe-ai/jev` | `AI_GATEWAY_API_KEY` |
 
 Notes: `d1:free` is text-only with no published rate limits; Liquid's free-tier
 terms permit training on API content — the gate only sends the current summary
 plus a compact digest (user messages truncated to 400 chars + tool-call names).
-The gateway has **no decision endpoint** (chat/responses/embeddings only), so
-`chat`-type providers ask for a bare YES/NO and map it to 0.9/0.1; its
-$5/month free credit (payment method required on file) dwarfs this workload.
+The gateway now HAS a TypeSafe-compatible decision endpoint
+(`POST /typesafe/v1/systemone`, live-verified 2026-11-10), but free-tier
+gateway keys have no decision-model access at all (models list returns empty;
+jev → 403 RestrictedModelsError), so the default `vercel` preset stays on the
+`chat` shim (YES/NO → 0.9/0.1) — it works on the free tier's $5/month credit.
+Paid tiers can add `vercel-jev` to `providers` for typed probabilities, and
+the gateway also carries other decision models (Liquid d1, Laya, Microsoft
+Decision-1, Perplexity Decider) plus server-side decision fallbacks
+(`providerOptions.gateway.models` with `confidenceBelow` conditions).
 `chat` is also the local-model path: a keyless spec + localhost URL gives a
 zero-cost, zero-egress tier (e.g. Ollama).
 
