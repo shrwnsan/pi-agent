@@ -5,7 +5,7 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
+## [0.3.37] - 2026-11-12
 
 ### Added
 - **session-summary v1.3.8.** `vercel-jev` opt-in preset: typed Jev through the Vercel AI Gateway's TypeSafe-compatible decision endpoint (`POST /typesafe/v1/systemone`), for paid tiers. Not in the default cycle — free-tier gateway keys have no decision-model access (live-verified 2026-11-10: `/typesafe/v1/models` empty, jev → 403 RestrictedModelsError), so the default `vercel` chat-shim preset is unchanged.
