@@ -458,12 +458,12 @@ console.log("\n[13] gate attempt trail");
 	piAi.__reset();
 	rmSync(GLOBAL_LOG, { force: true });
 	writeConfig({ debounceSeconds: 0, telemetry: { enabled: true, path: GLOBAL_LOG } });
-	// liquid is first in the cycle and fails with 401; typesafe answers.
+	// typesafe is first in the default cycle and fails with 401; liquid answers.
 	process.env.LIQUID_API_KEY = "probe";
 	process.env.TYPESAFE_API_KEY = "probe";
 	const realFetch = globalThis.fetch;
 	globalThis.fetch = async (url) => {
-		if (String(url).includes("liquid")) {
+		if (String(url).includes("typesafe")) {
 			return { ok: false, status: 401, json: async () => ({}) };
 		}
 		return { ok: true, json: async () => ({ answers: { material_change: { noul: 0.85 }, topic: { choice: "same_topic", confidence: 0.9 } } }) };
@@ -474,12 +474,12 @@ console.log("\n[13] gate attempt trail");
 		await startSession(h);
 		await agentEnd(h); // first summary (full, ungated)
 		branch.push(msgEntry("user", "material change"));
-		await agentEnd(h); // gate: liquid 401 → typesafe summarize
+		await agentEnd(h); // gate: typesafe 401 → liquid summarize
 		await tick();
 		const events = readFileSync(GLOBAL_LOG, "utf8").trim().split("\n").map((l) => JSON.parse(l));
 		const gateEvt = events.filter((e) => e.kind === "gate").at(-1);
-		ok(gateEvt?.provider === "typesafe" && gateEvt?.outcome === "ok", "decision event names the answering provider");
-		ok(Array.isArray(gateEvt?.attempts) && gateEvt.attempts.includes("liquid: HTTP 401"), "attempts trail records the failed provider", JSON.stringify(gateEvt?.attempts));
+		ok(gateEvt?.provider === "liquid" && gateEvt?.outcome === "ok", "decision event names the answering provider");
+		ok(Array.isArray(gateEvt?.attempts) && gateEvt.attempts.includes("typesafe: HTTP 401"), "attempts trail records the failed provider", JSON.stringify(gateEvt?.attempts));
 	} finally {
 		globalThis.fetch = realFetch;
 		delete process.env.LIQUID_API_KEY;

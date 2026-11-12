@@ -13,6 +13,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Fixed
 - README corrected: the gateway has had a decision endpoint since 2026-09-21; the previous "no decision endpoint" note described the free tier's model access, not the API surface.
 
+### Changed
+- **session-summary v1.3.9.** `liquid` preset model `d1:free` → `d1.1`: Liquid retired the free tier (live-checked 2026-11-12 — the `decisions/v1/systemone` endpoint still stands; hosted decision models are now `d1.1`/`d1-ultra`, paid, billed on input tokens only with output always 0 tokens; the free tier was replaced by a $2 one-time credit, and OpenRouter no longer lists any Liquid d1 model, so there is no free-adjacent path left to fall back to). Default gate cycle reordered `typesafe` → `liquid` → `vercel` so the paid provider is no longer tried first. Extension header now carries the v1.3.8 note the previous release missed.
+
 ## [0.3.36] - 2026-11-03
 
 ### Fixed

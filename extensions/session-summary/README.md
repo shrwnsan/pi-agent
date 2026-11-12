@@ -40,14 +40,18 @@ Built-in presets:
 
 | Name | Wire format | Endpoint | Model | Key env var |
 |------|-------------|----------|-------|-------------|
-| `liquid` | `systemone` | `api.liquid.ai/decisions/v1/systemone` | `d1:free` | `LIQUID_API_KEY` |
+| `liquid` | `systemone` | `api.liquid.ai/decisions/v1/systemone` | `d1.1` | `LIQUID_API_KEY` |
 | `typesafe` | `systemone` | `api.typesafe.ai/v1/systemone` | `jev-latest` | `TYPESAFE_API_KEY` |
 | `vercel` | `chat` | `ai-gateway.vercel.sh/v1/chat/completions` | `google/gemini-3.1-flash-lite` | `AI_GATEWAY_API_KEY` |
 | `vercel-jev` | `systemone` | `ai-gateway.vercel.sh/typesafe/v1/systemone` | `typesafe-ai/jev` | `AI_GATEWAY_API_KEY` |
 
-Notes: `d1:free` is text-only with no published rate limits; Liquid's free-tier
-terms permit training on API content — the gate only sends the current summary
-plus a compact digest (user messages truncated to 400 chars + tool-call names).
+Notes: Liquid retired the `d1:free` tier (checked 2026-11-12): hosted
+decision models are now `d1.1` and `d1-ultra`, paid and billed on input
+tokens only — output is always 0 tokens, so gate calls stay cheap; the old
+free tier was replaced by a $2 one-time credit for new organizations, and
+OpenRouter no longer lists any Liquid d1 model. As with every provider, the
+gate only sends the current summary plus a compact digest (user messages
+truncated to 400 chars + tool-call names).
 The gateway now HAS a TypeSafe-compatible decision endpoint
 (`POST /typesafe/v1/systemone`, live-verified 2026-11-10), but free-tier
 gateway keys have no decision-model access at all (models list returns empty;
@@ -69,7 +73,7 @@ Example — add a custom provider, override a preset, reorder the chain:
     "specs": {
       "openrouter":   { "type": "systemone", "url": "https://openrouter.ai/api/alpha/decisions", "model": "typesafe/jev", "apiKeyEnv": "OPENROUTER_API_KEY" },
       "local-ollama": { "type": "chat", "url": "http://127.0.0.1:11434/v1/chat/completions", "model": "qwen3:0.6b", "timeoutMs": 8000 },
-      "liquid":       { "model": "d1:paid" }
+      "liquid":       { "model": "d1-ultra" }
     }
   }
 }
@@ -160,7 +164,7 @@ renames also survive the race against an in-flight summary call.
   },
   "decisionGate": {
     "enabled": true,
-    "providers": ["liquid", "typesafe", "vercel"],
+    "providers": ["typesafe", "liquid", "vercel"],
     "confidenceThreshold": 0.7,   // p(material) >= 0.7 → summarize; <= 0.3 → skip
     "timeoutMs": 5000,
     "maxConsecutiveFailures": 3,
