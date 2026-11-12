@@ -1,5 +1,5 @@
 /**
- * session-summary v1.3.9 (pi-agent fork) — maintains a one-line LLM-generated
+ * session-summary v1.3.10 (pi-agent fork) — maintains a one-line LLM-generated
  * session summary as the session name, so it shows up in pi's status bar and
  * the /resume session list instead of the truncated first user message.
  *
@@ -29,7 +29,7 @@
  *      the current branch length (everything on disk was already summarized).
  *   4. Manual-name guard — a name set via /name (anything not written by this
  *      extension) is never overwritten; /summary:clear re-enables auto-naming.
- *   5. /summary:gate — inspect gate provider status and dry-run a verdict.
+ *   5. /summary:gate — inspect gate provider status and get a live verdict.
  *   6. Summarizer resolution (v1.2.0): explicit pin → cheap-model ladder →
  *      the session's own model (inherit) — zero-config machines get working
  *      summaries with the prompt never leaving providers it already uses.
@@ -92,6 +92,11 @@
  *  v1.3.9: liquid preset model d1:free → d1.1 (Liquid retired the free
  *  tier; hosted decision models are paid, billed on input tokens only) and
  *  the default gate cycle reordered typesafe → liquid → vercel.
+ *  v1.3.10: /summary:gate is a live check, not a dry run. The command runs
+ *  the real gate with a real decision-model call and moves the session
+ *  failure counters toward the three-strike disable, so "dry" understated
+ *  its side effects. Wording only (command description, coverage
+ *  notification, docs); no behavior change.
  *  v1.3.2 fix: /summary:cost project|lifetime and /summary:gate emitted their
  *  rollups as successive info notifies; pi's TUI collapses consecutive info
  *  notifies into one status line (only the last message survives), so users
@@ -1041,7 +1046,7 @@ export default function sessionSummaryExtension(pi: ExtensionAPI) {
 	});
 
 	pi.registerCommand("summary:gate", {
-		description: "Show decision-gate provider status and dry-run a verdict",
+		description: "Show decision-gate provider status and a live verdict",
 		handler: async (_args, ctx) => {
 			const gateConfig = config.decisionGate;
 			if (!gateConfig.enabled) {
@@ -1061,7 +1066,7 @@ export default function sessionSummaryExtension(pi: ExtensionAPI) {
 			}
 			const activity = buildActivityDigest(deltaEntries);
 			if (!activity.trim()) {
-				ctx.ui.notify(`${gateStatus}\nNo uncovered activity (${processedEntryCount}/${branch.length} entries covered by the summary) — the pipeline already judged everything. New turns reopen the dry run inside the debounce window.`, "info");
+				ctx.ui.notify(`${gateStatus}\nNo uncovered activity (${processedEntryCount}/${branch.length} entries covered by the summary) — the pipeline already judged everything. New turns reopen the live check inside the debounce window.`, "info");
 				return;
 			}
 			const verdict = await runDecisionGate(gateConfig, gateState, lastSummary, activity);

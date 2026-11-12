@@ -15,6 +15,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 - **session-summary v1.3.9.** `liquid` preset model `d1:free` → `d1.1`: Liquid retired the free tier (live-checked 2026-11-12 — the `decisions/v1/systemone` endpoint still stands; hosted decision models are now `d1.1`/`d1-ultra`, paid, billed on input tokens only with output always 0 tokens; the free tier was replaced by a $2 one-time credit, and OpenRouter no longer lists any Liquid d1 model, so there is no free-adjacent path left to fall back to). Default gate cycle reordered `typesafe` → `liquid` → `vercel` so the paid provider is no longer tried first. Extension header now carries the v1.3.8 note the previous release missed.
+- **session-summary v1.3.10.** `/summary:gate` wording: "dry run" → "live check" / "live verdict" (command description, coverage notification, extension README). The old name understated side effects: the command makes a real decision-model call and moves the session failure counters toward the three-strike disable. "Dry" is only true of the summarizer call it does not make. No behavior change; historical CHANGELOG entries keep the old name. The term originated in the v1.3.0 release notes and spread from there.
 
 ## [0.3.36] - 2026-11-03
 
