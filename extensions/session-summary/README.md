@@ -99,7 +99,7 @@ re-enables auto-naming); `/summary:cost` counts gate calls.
 | `/summary:update` | Force a full summary update now (bypasses gate and debounce) |
 | `/summary:clear` | Reset the summary and name (also re-enables auto-naming) |
 | `/summary:cost` | Summary model, LLM + gate call counts, token/cost breakdown. With telemetry on: `/summary:cost project` and `/summary:cost lifetime` roll up the local usage log |
-| `/summary:gate` | Gate provider readiness in cycle order + dry-run a verdict |
+| `/summary:gate` | Gate provider readiness in cycle order + a live verdict |
 | `/summary:lock` | Toggle: freeze the current summary without renaming — auto-updates off for the session; run again to resume |
 
 ## Summarizer resolution

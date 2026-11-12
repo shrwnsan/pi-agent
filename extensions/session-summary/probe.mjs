@@ -449,7 +449,7 @@ console.log("\n[12] gate diagnostics single notify");
 	ok(h.notifications.length === 1, "gate diagnostics render as ONE notify (status + outcome survive collapse)");
 	const diag = h.notifications.at(-1)?.msg ?? "";
 	ok(diag.includes("[gate]") && diag.includes("No uncovered activity"), "provider status AND coverage message both visible");
-	ok(diag.includes("covered by the summary") && diag.includes("reopen the dry run"), "coverage message explains steady state");
+	ok(diag.includes("covered by the summary") && diag.includes("reopen the live check"), "coverage message explains steady state");
 }
 
 // == 13. Gate attempt trail ==================================================
