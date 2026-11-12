@@ -1,5 +1,5 @@
 /**
- * session-summary v1.3.7 (pi-agent fork) — maintains a one-line LLM-generated
+ * session-summary v1.3.9 (pi-agent fork) — maintains a one-line LLM-generated
  * session summary as the session name, so it shows up in pi's status bar and
  * the /resume session list instead of the truncated first user message.
  *
@@ -7,7 +7,7 @@
  * Fork changes (see ./decision-gate.ts for the gate itself):
  *
  *   1. Decision gate — before every generative summary call, a decision model
- *      (System One contract via Liquid d1:free / TypeSafe Jev / any compatible
+ *      (System One contract via TypeSafe Jev / Liquid d1.1 / any compatible
  *      endpoint, or a chat-completions YES/NO shim for Vercel AI Gateway and
  *      local models) decides whether anything material changed since the last
  *      summary. Confident no-op turns are skipped entirely: no LLM call, name
@@ -85,6 +85,13 @@
  *  notify. The previous separate status notify was replaced by the outcome
  *  message under pi's notify collapse, so provider readiness (fail counts,
  *  key state) was never visible.
+ *  v1.3.8: vercel-jev opt-in preset — typed Jev via the gateway's
+ *  TypeSafe-compatible decision endpoint; not in the default cycle (free-tier
+ *  gateway keys have no decision-model access). Header note added late —
+ *  the v1.3.8 release shipped without bumping this header.
+ *  v1.3.9: liquid preset model d1:free → d1.1 (Liquid retired the free
+ *  tier; hosted decision models are paid, billed on input tokens only) and
+ *  the default gate cycle reordered typesafe → liquid → vercel.
  *  v1.3.2 fix: /summary:cost project|lifetime and /summary:gate emitted their
  *  rollups as successive info notifies; pi's TUI collapses consecutive info
  *  notifies into one status line (only the last message survives), so users

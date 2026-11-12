@@ -26,11 +26,13 @@
  *
  * Two wire formats:
  *   "systemone" — the shared System One contract (state + typed questions →
- *                 answers.<id>.noul/.choice). Used by Liquid AI d1
- *                 (d1:free, text-only, no published rate limits; free-tier
- *                 terms permit training on API content), TypeSafe Jev, and
- *                 any compatible endpoint (e.g. OpenRouter's decision
- *                 surfaces).
+ *                 answers.<id>.noul/.choice). Used by TypeSafe Jev, Liquid
+ *                 AI d1.1, and any compatible endpoint. Liquid's d1:free
+ *                 tier is gone (live-checked 2026-11-12: hosted decision
+ *                 models are now d1.1/d1-ultra, paid, billed on input
+ *                 tokens only — output is always 0 tokens; the free tier
+ *                 was replaced by a $2 one-time credit for new orgs, and
+ *                 OpenRouter no longer lists any Liquid d1 model).
  *   "chat"      — OpenAI-compatible chat completions asked for a bare
  *                 YES/NO, mapped to 0.9/0.1. For decision-model tiers that
  *                 are not accessible (the Vercel AI Gateway HAS a TypeSafe-
@@ -77,7 +79,7 @@ export const BUILTIN_SPECS: Record<string, GateProviderSpec> = {
 	liquid: {
 		type: "systemone",
 		url: "https://api.liquid.ai/decisions/v1/systemone",
-		model: "d1:free",
+		model: "d1.1", // d1:free retired; paid, input-token billing only (output is always 0 tokens)
 		apiKeyEnv: "LIQUID_API_KEY",
 	},
 	typesafe: {
@@ -107,7 +109,9 @@ export const BUILTIN_SPECS: Record<string, GateProviderSpec> = {
 
 const DEFAULTS = {
 	enabled: true,
-	providers: ["liquid", "typesafe", "vercel"],
+	// Cycle order: typesafe first (typed probabilities), then liquid (paid
+	// since the d1:free tier retired), then the gateway chat shim.
+	providers: ["typesafe", "liquid", "vercel"],
 	confidenceThreshold: 0.7,
 	timeoutMs: 5_000,
 	maxConsecutiveFailures: 3,
